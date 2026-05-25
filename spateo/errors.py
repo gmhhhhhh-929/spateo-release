@@ -1,14 +1,26 @@
-class ConfigurationError(Exception):
-    pass
+class SpateoError(Exception):
+    """Base exception for Spateo errors."""
 
 
-class PreprocessingError(Exception):
-    pass
+class ConfigurationError(SpateoError):
+    """Raised when Spateo receives an invalid configuration."""
 
 
-class PlottingError(Exception):
-    pass
+class PreprocessingError(SpateoError):
+    """Raised when preprocessing cannot be completed."""
 
 
-class SegmentationError(Exception):
-    pass
+class SpatialKeyError(PreprocessingError):
+    """Raised when spatial coordinates are missing or invalid."""
+
+
+class LayerKeyError(PreprocessingError):
+    """Raised when a requested AnnData layer is missing."""
+
+
+class PlottingError(SpateoError):
+    """Raised when plotting cannot be completed."""
+
+
+class SegmentationError(SpateoError):
+    """Raised when segmentation cannot be completed."""

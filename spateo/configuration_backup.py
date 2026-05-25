@@ -16,8 +16,8 @@ from cycler import cycler
 from matplotlib import cm, colors, rcParams
 from scipy import sparse
 
-from .errors import ConfigurationError, LayerKeyError, SpatialKeyError
-from . import spateo_logger as lm
+from .errors import ConfigurationError
+from .logging import logger_manager as lm
 
 # Global tolerance value:
 EPS = np.finfo(float).eps
@@ -103,15 +103,9 @@ class SpateoAdataKeyManager:
     UNS_SPATIAL_SEGMENTATION_KEY = "segmentation"
     UNS_SPATIAL_ALIGNMENT_KEY = "alignment"
     UNS_SPATIAL_QC_KEY = "qc"
-    UNS_SPATIAL_NEIGHBORS_KEY = "spatial_neighbors"
-    UNS_PP_TKEY = "time"
 
     SPLICED_LAYER_KEY = "spliced"
     UNSPLICED_LAYER_KEY = "unspliced"
-    COUNT_LAYER_KEY = "counts"
-    NORM_LAYER_KEY = "norm"
-    LOG1P_LAYER_KEY = "log1p_norm"
-    SCALE_LAYER_KEY = "scale"
     STAIN_LAYER_KEY = "stain"
     LABELS_LAYER_KEY = "labels"
     MASK_SUFFIX = "mask"
@@ -126,38 +120,6 @@ class SpateoAdataKeyManager:
     BOUNDARY_SUFFIX = "boundary"
 
     X_LAYER = "X"
-    X_PCA = "X_pca"
-    OBSM_SPATIAL_KEY = "spatial"
-    OBSM_X_PCA_KEY = "X_pca"
-
-    OBS_TOTAL_COUNTS_KEY = "total_counts"
-    OBS_N_GENES_BY_COUNTS_KEY = "n_genes_by_counts"
-    OBS_PCT_COUNTS_MT_KEY = "pct_counts_mt"
-    OBS_PCT_COUNTS_RIBO_KEY = "pct_counts_ribo"
-    OBS_PCT_COUNTS_HB_KEY = "pct_counts_hb"
-    OBS_PASS_SPATIAL_QC_KEY = "pass_spatial_qc"
-    OBS_LOCAL_QC_OUTLIER_KEY = "local_qc_outlier"
-
-    VAR_N_CELLS_BY_COUNTS_KEY = "n_cells_by_counts"
-    VAR_TOTAL_COUNTS_KEY = "total_counts"
-    VAR_MEAN_COUNTS_KEY = "mean_counts"
-    VAR_PASS_BASIC_FILTER_KEY = "pass_basic_filter"
-    VAR_HIGHLY_VARIABLE_KEY = "highly_variable"
-    VAR_SPATIALLY_VARIABLE_KEY = "spatially_variable"
-    VAR_USE_FOR_PCA_KEY = "use_for_pca"
-    VAR_MORAN_I_KEY = "moran_i"
-    VAR_SPATIAL_SCORE_KEY = "spatial_score"
-
-    OBSP_SPATIAL_CONNECTIVITIES_KEY = "spatial_connectivities"
-    OBSP_SPATIAL_DISTANCES_KEY = "spatial_distances"
-    OBSP_CONNECTIVITIES_KEY = "connectivities"
-    OBSP_DISTANCES_KEY = "distances"
-
-    # Backward compatible aliases used by older Spateo/dynamo-derived code.
-    VAR_GENE_HIGHLY_VARIABLE_KEY = VAR_HIGHLY_VARIABLE_KEY
-    VAR_GENE_MEAN_KEY = "means"
-    VAR_GENE_VAR_KEY = "variances"
-    VAR_USE_FOR_PCA = VAR_USE_FOR_PCA_KEY
 
     def gen_new_layer_key(layer_name: str, key: str, sep: str = "_") -> str:
         if layer_name == "":
@@ -167,18 +129,15 @@ class SpateoAdataKeyManager:
         return sep.join([layer_name, key])
 
     def select_layer_data(
-        adata: AnnData, layer: Optional[str] = None, copy: bool = False, make_dense: bool = False
+        adata: AnnData, layer: str, copy: bool = False, make_dense: bool = False
     ) -> Union[np.ndarray, sparse.spmatrix]:
         lm.main_info(f"<select> {layer} layer in AnnData Object")
         if layer is None:
             layer = SpateoAdataKeyManager.X_LAYER
+        res_data = None
         if layer == SpateoAdataKeyManager.X_LAYER:
             res_data = adata.X
         else:
-            if layer not in adata.layers:
-                raise LayerKeyError(
-                    f"AnnData layer `{layer}` is missing. Available layers: {list(adata.layers.keys())}."
-                )
             res_data = adata.layers[layer]
         if make_dense and sparse.issparse(res_data):
             return res_data.toarray()
@@ -189,8 +148,6 @@ class SpateoAdataKeyManager:
     def set_layer_data(
         adata: AnnData, layer: str, vals: np.ndarray, var_indices: Optional[np.ndarray] = None, replace: bool = False
     ):
-        if layer is None:
-            layer = SpateoAdataKeyManager.X_LAYER
         lm.main_info_insert_adata_layer(layer)
 
         # Mostly for testing
@@ -208,34 +165,6 @@ class SpateoAdataKeyManager:
             # layer does not exist in adata
             # ignore var_indices and set values as a new layer
             adata.layers[layer] = vals
-
-    def ensure_spatial_key(adata: AnnData, spatial_key: str = "spatial") -> np.ndarray:
-        """Validate and return spatial coordinates from ``adata.obsm``.
-
-        Args:
-            adata: AnnData object to validate.
-            spatial_key: Key in ``adata.obsm`` storing coordinates.
-
-        Returns:
-            The coordinate array.
-
-        Raises:
-            SpatialKeyError: If coordinates are missing or invalid.
-        """
-        if spatial_key not in adata.obsm:
-            raise SpatialKeyError(
-                f"AnnData is missing spatial coordinates in `adata.obsm[{spatial_key!r}]`. "
-                f"Available obsm keys: {list(adata.obsm.keys())}."
-            )
-        coords = np.asarray(adata.obsm[spatial_key])
-        if coords.ndim != 2 or coords.shape[0] != adata.n_obs or coords.shape[1] < 2:
-            raise SpatialKeyError(
-                f"`adata.obsm[{spatial_key!r}]` must have shape (n_obs, >=2); "
-                f"received {coords.shape} for n_obs={adata.n_obs}."
-            )
-        if not np.all(np.isfinite(coords[:, : min(coords.shape[1], 3)])):
-            raise SpatialKeyError(f"`adata.obsm[{spatial_key!r}]` contains NaN or infinite coordinates.")
-        return coords
 
     def get_adata_type(adata: AnnData) -> str:
         return adata.uns[SpateoAdataKeyManager.ADATA_TYPE_KEY]
