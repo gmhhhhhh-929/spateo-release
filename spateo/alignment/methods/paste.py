@@ -70,14 +70,14 @@ def paste_pairwise_align(
     """
 
     # Preprocessing
-    (nx, type_as, new_samples, exp_matrices, spatial_coords, normalize_scale, normalize_mean_list,) = align_preprocess(
+    (nx,type_as,exp_layers,spatial_coords,_,normalize_scale,normalize_mean_list,_,) = align_preprocess(
         samples=[sampleA, sampleB],
         genes=genes,
         spatial_key=spatial_key,
-        layer=layer,
+        rep_layer=layer,
+        rep_field="layer",
         normalize_c=False,
         normalize_g=False,
-        select_high_exp_genes=False,
         dtype=dtype,
         device=device,
         verbose=verbose,
@@ -89,7 +89,7 @@ def paste_pairwise_align(
     D_B = ot.dist(coordsB, coordsB, metric="euclidean")
 
     # Calculate expression dissimilarity
-    X_A, X_B = exp_matrices[0], exp_matrices[1]
+    X_A, X_B = exp_layers[0][0], exp_layers[1][0]
     M = calc_exp_dissimilarity(X_A=X_A, X_B=X_B, dissimilarity=dissimilarity)
 
     # init distributions
