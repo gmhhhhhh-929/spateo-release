@@ -701,7 +701,7 @@ def align_preprocess(
     ]
 
     # check the spatial coordinates dimensionality
-    coords_dims = nx.unique(_data(nx, [c.shape[1] for c in spatial_coords], type_as))
+    coords_dims = np.unique(np.array([int(c.shape[1]) for c in spatial_coords]))
     assert len(coords_dims) == 1, "Spatial coordinate dimensions are different, please check again."
 
     # Normalize spatial coordinates if required
