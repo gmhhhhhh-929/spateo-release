@@ -19,7 +19,22 @@ Compatibility shortcuts:
 from . import single, spatial, general
 from .single import read, read_10x_h5, read_10x_mtx, read_h5ad
 from .general import read_csv, save, load
-from .spatial import read_visium_hd, read_visium, read_xenium, read_slideseq, read_merfish, read_starmap_plus, read_bgi, read_nanostring,read_seqfish
+from .spatial import (
+    SpatialReadMatch,
+    detect_spatial_technologies,
+    detect_spatial_technology,
+    read_auto_spatial,
+    read_bgi,
+    read_merfish,
+    read_nanostring,
+    read_seqfish,
+    read_slideseq,
+    read_spatial_auto,
+    read_starmap_plus,
+    read_visium,
+    read_visium_hd,
+    read_xenium,
+)
 
 
 
@@ -42,6 +57,11 @@ __all__ = [
     "read_starmap_plus",
     "read_nanostring",
     "read_bgi",
+    "SpatialReadMatch",
+    "detect_spatial_technologies",
+    "detect_spatial_technology",
+    "read_auto_spatial",
+    "read_spatial_auto",
 
     "read_csv",
     "save",

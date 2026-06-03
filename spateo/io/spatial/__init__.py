@@ -8,4 +8,27 @@ from ._slideseq import read_slideseq
 from ._merfish import read_merfish
 from ._starmap_plus import read_starmap_plus
 from ._stereoseq import read_bgi
-__all__ = ["read_visium", "read_xenium", "read_slideseq", "read_merfish", "read_starmap_plus","read_bgi","read_nanostring","read_visium_hd","read_seqfish"]
+from .auto import (
+    SpatialReadMatch,
+    detect_spatial_technologies,
+    detect_spatial_technology,
+    read_auto_spatial,
+    read_spatial_auto,
+)
+
+__all__ = [
+    "read_visium",
+    "read_xenium",
+    "read_slideseq",
+    "read_merfish",
+    "read_starmap_plus",
+    "read_bgi",
+    "read_nanostring",
+    "read_visium_hd",
+    "read_seqfish",
+    "SpatialReadMatch",
+    "detect_spatial_technologies",
+    "detect_spatial_technology",
+    "read_auto_spatial",
+    "read_spatial_auto",
+]
