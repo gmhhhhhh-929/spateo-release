@@ -14,8 +14,8 @@ import numpy as np
 from anndata import AnnData
 from scipy import sparse
 
-from ...configuration import SKM
-from ...spateo_logger import LoggerManager
+from ....configuration import SKM
+from ....spateo_logger import LoggerManager
 
 logger = LoggerManager.get_main_logger()
 

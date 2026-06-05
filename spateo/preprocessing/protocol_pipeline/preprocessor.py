@@ -6,8 +6,8 @@ from typing import Literal, Optional
 
 from anndata import AnnData
 
-from ..configuration import SKM
-from ..spateo_logger import LoggerManager
+from ...configuration import SKM
+from ...spateo_logger import LoggerManager
 from .external.pearson_residual_recipe import pearson_residuals
 from .external.sctransform import sctransform as run_sctransform
 from .feature import select_spatial_features

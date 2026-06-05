@@ -16,8 +16,8 @@ from anndata import AnnData
 from scipy import sparse
 from sklearn.utils.sparsefuncs import mean_variance_axis
 
-from ...configuration import SKM
-from ...spateo_logger import LoggerManager
+from ....configuration import SKM
+from ....spateo_logger import LoggerManager
 from ..utils import _record_step
 
 logger = LoggerManager.get_main_logger()

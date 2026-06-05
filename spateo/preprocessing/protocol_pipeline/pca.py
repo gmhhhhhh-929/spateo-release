@@ -9,8 +9,8 @@ from anndata import AnnData
 from scipy import sparse
 from sklearn.decomposition import PCA, TruncatedSVD
 
-from ..configuration import SKM
-from ..spateo_logger import LoggerManager
+from ...configuration import SKM
+from ...spateo_logger import LoggerManager
 from .utils import _record_step
 
 logger = LoggerManager.get_main_logger()

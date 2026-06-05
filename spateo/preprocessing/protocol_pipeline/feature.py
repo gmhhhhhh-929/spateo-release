@@ -9,8 +9,8 @@ from anndata import AnnData
 from scipy import sparse
 from sklearn.utils.sparsefuncs import mean_variance_axis
 
-from ..configuration import SKM
-from ..spateo_logger import LoggerManager
+from ...configuration import SKM
+from ...spateo_logger import LoggerManager
 from .qc import _axis_sum
 from .utils import _record_step
 
