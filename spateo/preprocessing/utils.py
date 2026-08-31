@@ -71,7 +71,7 @@ def standardize_spatial_adata(
     Examples:
         >>> import spateo as st
         >>> adata = st.read_h5ad("sample.h5ad")
-        >>> st.pp.preprocess_spatial(adata, recipe="generic", spatial_key="spatial")
+        >>> st.pp.preprocess_spatial(adata, recipe="standard", spatial_key="spatial")
 
     Args:
         adata: Input AnnData object.

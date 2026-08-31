@@ -49,17 +49,29 @@ def _top_mask(scores: np.ndarray, n_top: int, allowed: Optional[np.ndarray] = No
     return mask
 
 
-def _dispersion_score(X: object) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _dispersion_score(X: object, n_bins: int = 20) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return mean-binned normalized dispersion scores.
+
+    Binning by mean expression avoids systematically ranking low-abundance genes
+    above genes measured on a different mean-variance scale.
+    """
     means, variances = _mean_var(X)
     dispersions = variances / np.maximum(means, np.finfo(float).eps)
-    scores = np.zeros_like(dispersions, dtype=float)
-    finite = np.isfinite(dispersions)
-    if finite.any():
-        center = np.median(dispersions[finite])
-        scale = 1.4826 * np.median(np.abs(dispersions[finite] - center))
-        if not np.isfinite(scale) or scale == 0:
-            scale = np.std(dispersions[finite])
-        scores[finite] = (dispersions[finite] - center) / (scale + np.finfo(float).eps)
+    log_dispersions = np.log(np.maximum(dispersions, np.finfo(float).tiny))
+    scores = np.full_like(dispersions, -np.inf, dtype=float)
+    finite = np.isfinite(means) & np.isfinite(log_dispersions)
+    finite_idx = np.flatnonzero(finite)
+    if finite_idx.size:
+        order = finite_idx[np.argsort(means[finite_idx], kind="stable")]
+        for idx in np.array_split(order, min(n_bins, order.size)):
+            center = np.median(log_dispersions[idx])
+            scale = 1.4826 * np.median(np.abs(log_dispersions[idx] - center))
+            if not np.isfinite(scale) or scale <= np.finfo(float).eps:
+                scale = np.std(log_dispersions[idx])
+            if not np.isfinite(scale) or scale <= np.finfo(float).eps:
+                scores[idx] = 0.0
+            else:
+                scores[idx] = (log_dispersions[idx] - center) / scale
     return means, variances, scores
 
 
@@ -96,6 +108,7 @@ def select_spatial_features(
     spatial_connectivities_key: str = "spatial_connectivities",
     feature_key: str = "use_for_pca",
     exclude_gene_prefixes: Sequence[str] = ("MT-", "mt-", "Mt-"),
+    score_method: Literal["dispersion", "variance"] = "dispersion",
     inplace: bool = True,
 ) -> Optional[AnnData]:
     """Select genes for PCA using HVG, SVG, or combined strategies.
@@ -108,6 +121,8 @@ def select_spatial_features(
         batch_key: Optional batch key, recorded for provenance.
         spatial_connectivities_key: Spatial graph key used by SVG methods.
         feature_key: Output key in ``adata.var``.
+        score_method: Rank HVGs by mean-binned dispersion for log-normalized
+            data, or by variance for Pearson residuals.
         inplace: If ``True``, modify ``adata`` in place.
 
     Returns:
@@ -119,7 +134,11 @@ def select_spatial_features(
     if method not in valid_methods:
         raise ValueError(f"Unknown feature selection method {method!r}; expected one of {sorted(valid_methods)}.")
     X = SKM.select_layer_data(adata, layer=layer, copy=False)
+    if score_method not in {"dispersion", "variance"}:
+        raise ValueError("`score_method` must be one of {'dispersion', 'variance'}.")
     means, variances, disp_norm = _dispersion_score(X)
+    if score_method == "variance":
+        disp_norm = np.asarray(variances, dtype=float)
     dispersions = variances / np.maximum(means, np.finfo(float).eps)
 
     technical = _technical_gene_mask(adata.var_names, exclude_gene_prefixes)
@@ -139,7 +158,9 @@ def select_spatial_features(
             index = np.flatnonzero(batches == batch)
             if index.size < 2:
                 continue
-            _, _, scores = _dispersion_score(X[index])
+            _, batch_variances, scores = _dispersion_score(X[index])
+            if score_method == "variance":
+                scores = np.asarray(batch_variances, dtype=float)
             batch_scores.append(scores)
             hvg_nbatches += _top_mask(scores, n_top_genes, allowed=allowed).astype(int)
         if batch_scores:
@@ -192,6 +213,7 @@ def select_spatial_features(
         "spatial_connectivities_key": spatial_connectivities_key,
         "feature_key": feature_key,
         "exclude_gene_prefixes": list(exclude_gene_prefixes),
+        "score_method": score_method,
     }
     _record_step(adata, "select_spatial_features", adata.uns[SKM.UNS_PP_KEY]["feature_selection"])
     return None if inplace else adata

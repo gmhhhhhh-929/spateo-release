@@ -6,7 +6,7 @@ import numpy as np
 from anndata import AnnData
 from scipy import sparse
 
-from spateo.preprocessing import preprocess_spatial
+from spateo.preprocessing import normalize_total, preprocess_spatial
 
 
 class TestSpatialPreprocessing(TestCase):
@@ -28,7 +28,8 @@ class TestSpatialPreprocessing(TestCase):
         self.assertIsNotNone(result)
         self.assertEqual([], list(adata.layers.keys()))
         self.assertEqual((30, 12), adata.shape)
-        self.assertEqual("atera", result.uns["pp"]["spatial_preprocess"]["recipe"])
+        self.assertEqual("standard", result.uns["pp"]["spatial_preprocess"]["recipe"])
+        self.assertEqual("atera", result.uns["pp"]["spatial_preprocess"]["technology"])
         self.assertEqual({"counts", "norm", "log1p_norm"}, set(result.layers.keys()))
         np.testing.assert_array_equal(result.layers["counts"].toarray(), adata.X.toarray())
         np.testing.assert_allclose(np.asarray(result.layers["norm"].sum(axis=1)).ravel(), 1e4)
@@ -42,8 +43,50 @@ class TestSpatialPreprocessing(TestCase):
         with self.assertRaisesRegex(ValueError, "integer-like"):
             preprocess_spatial(
                 adata,
-                recipe="generic",
+                recipe="standard",
                 validate_counts="error",
                 build_spatial_graph=False,
                 run_pca=False,
             )
+
+    def test_median_size_factor_normalization_can_replace_x(self):
+        counts = sparse.csr_matrix([[1, 1], [2, 4], [0, 0]], dtype=int)
+        adata = AnnData(counts.copy())
+
+        normalize_total(adata, layer="X", out_layer="X", target_sum=None)
+
+        np.testing.assert_allclose(np.asarray(adata.X.sum(axis=1)).ravel(), [4.0, 4.0, 0.0])
+        np.testing.assert_allclose(adata.obs["size_factor"].to_numpy(), [0.5, 1.5, 1.0])
+        self.assertEqual(4.0, adata.uns["pp"]["normalize_total"]["resolved_target_sum"]["all"])
+
+    def test_library_aware_median_targets(self):
+        adata = AnnData(sparse.csr_matrix([[1, 1], [3, 3], [5, 5], [10, 10]], dtype=int))
+        adata.obs["library"] = ["a", "a", "b", "b"]
+
+        result = normalize_total(
+            adata,
+            layer="X",
+            out_layer="norm",
+            target_sum=None,
+            library_key="library",
+            inplace=False,
+        )
+
+        np.testing.assert_allclose(np.asarray(result.layers["norm"].sum(axis=1)).ravel(), [4, 4, 15, 15])
+        np.testing.assert_array_equal(adata.X.toarray(), [[1, 1], [3, 3], [5, 5], [10, 10]])
+
+    def test_raw_recipe_only_runs_qc_and_spatial_graph(self):
+        adata = AnnData(sparse.csr_matrix([[1, 0], [0, 2], [1, 1]], dtype=int))
+        adata.obsm["spatial"] = np.array([[0, 0], [1, 0], [2, 0]], dtype=float)
+
+        result = preprocess_spatial(adata, recipe="raw", min_cells=1, inplace=False)
+
+        self.assertEqual({"counts"}, set(result.layers))
+        self.assertNotIn("X_pca", result.obsm)
+        self.assertEqual("raw", result.uns["pp"]["spatial_preprocess"]["recipe"])
+
+    def test_sctransform_recipe_is_not_silently_approximated(self):
+        adata = AnnData(sparse.csr_matrix([[1, 0], [0, 1]], dtype=int))
+        adata.obsm["spatial"] = np.array([[0, 0], [1, 1]], dtype=float)
+        with self.assertRaisesRegex(ValueError, "no longer a production preprocessing recipe"):
+            preprocess_spatial(adata, recipe="sctransform", inplace=False)

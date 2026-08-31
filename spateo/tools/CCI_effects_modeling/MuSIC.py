@@ -24,7 +24,7 @@ from sklearn.cluster import KMeans
 from tqdm import tqdm
 
 from ...logging import logger_manager as lm
-from ...preprocessing.normalize import factor_normalization
+from ...preprocessing.normalization import normalize_total
 from ...preprocessing.transform import log1p
 from ...tools.spatial_smooth import smooth
 from ..find_neighbors import find_bw_for_n_neighbors, get_wi, neighbors
@@ -558,20 +558,18 @@ class MuSIC:
                     #     "inplace..."
                     # )
                     # target_sum to None to automatically determine suitable target sum:
-                    # self.adata = factor_normalization(self.adata, method="TMM", target_sum=None)
                     self.logger.info("Setting total counts in each cell to uniform target sum inplace...")
-                    factor_normalization(self.adata, target_sum=1e4)
+                    normalize_total(self.adata, layer="X", out_layer="X", target_sum=1e4)
                 else:
                     # self.logger.info(
                     #     "Computing TMM factors, setting total counts in each cell to uniform target sum and rounding "
                     #     "nonintegers inplace..."
                     # )
                     # target_sum to None to automatically determine suitable target sum:
-                    # self.adata = factor_normalization(self.adata, method="TMM", target_sum=None)
                     self.logger.info(
                         "Setting total counts in each cell to uniform target sum and rounding nonintegers inplace..."
                     )
-                    factor_normalization(self.adata, target_sum=1e4)
+                    normalize_total(self.adata, layer="X", out_layer="X", target_sum=1e4)
 
                     # Round, except for the case where data would round down to zero-
                     if scipy.sparse.issparse(self.adata.X):

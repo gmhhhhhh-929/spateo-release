@@ -1,4 +1,4 @@
-"""Recipe-based spatial transcriptomics preprocessing."""
+"""Analysis-oriented spatial transcriptomics preprocessing."""
 
 from __future__ import annotations
 
@@ -9,10 +9,9 @@ from anndata import AnnData
 from ..configuration import SKM
 from ..spateo_logger import LoggerManager
 from .external.pearson_residual_recipe import pearson_residuals
-from .external.sctransform import sctransform as run_sctransform
 from .feature import select_spatial_features
 from .graph import expression_neighbors, spatial_neighbors
-from .normalization import calculate_size_factors, normalize_total
+from .normalization import normalize_total
 from .pca import pca
 from .qc import (
     calculate_spatial_qc,
@@ -27,109 +26,100 @@ logger = LoggerManager.get_main_logger()
 
 Recipe = Literal[
     "auto",
+    "standard",
+    "pearson_residuals",
+    "raw",
+]
+
+
+_TECHNOLOGY_ALIASES = {
+    "bgi": "stereoseq",
+    "stereo": "stereoseq",
+    "slideseq": "slide_seq",
+    "visium_hd_bin": "visium_hd",
+    "visium_hd_cellseg": "visium_hd",
+    "nanostring": "cosmx",
+    "starmap_plus": "imaging",
+}
+_LEGACY_TECHNOLOGY_RECIPES = {
     "visium",
     "visium_hd",
     "generic",
     "stereoseq",
     "slide_seq",
-    "slideseq",
     "seqfish",
     "merfish",
     "xenium",
     "atera",
     "cosmx",
     "imaging",
-    "pearson_residuals",
-    "sctransform",
-]
+}
 
 
-def _infer_recipe(adata: AnnData, recipe: str) -> str:
-    aliases = {
-        "bgi": "stereoseq",
-        "stereo": "stereoseq",
-        "slideseq": "slide_seq",
-        "visium_hd_bin": "visium_hd",
-        "visium_hd_cellseg": "visium_hd",
-        "nanostring": "cosmx",
-        "starmap_plus": "imaging",
-    }
-    if recipe != "auto":
-        return aliases.get(recipe, recipe)
+def _detect_technology(adata: AnnData) -> str:
+    """Return normalized IO technology metadata without choosing an analysis."""
     io_metadata = adata.uns.get("spateo_io", {})
-    detected = str(io_metadata.get("technology") or io_metadata.get("type") or "").lower()
+    detected = str(io_metadata.get("technology") or io_metadata.get("type") or "generic").lower()
     detected = detected.removesuffix("_seg")
-    return aliases.get(detected, detected) if detected else "generic"
+    return _TECHNOLOGY_ALIASES.get(detected, detected)
+
+
+def _infer_recipe(recipe: str) -> str:
+    """Resolve an analysis recipe independently of the acquisition technology."""
+    recipe = recipe.lower()
+    if recipe == "auto":
+        return "standard"
+    normalized = _TECHNOLOGY_ALIASES.get(recipe, recipe)
+    if normalized in _LEGACY_TECHNOLOGY_RECIPES:
+        logger.warning(
+            f"Technology recipe `{recipe}` is deprecated and now maps to `standard`. "
+            "Technology metadata only controls the spatial graph; pass QC thresholds explicitly."
+        )
+        return "standard"
+    if normalized == "sctransform":
+        raise ValueError(
+            "`recipe='sctransform'` is no longer a production preprocessing recipe. "
+            "Use `recipe='pearson_residuals'`, or call the experimental "
+            "`spateo.preprocessing.external.sctransform` function explicitly."
+        )
+    valid = {"standard", "pearson_residuals", "raw"}
+    if normalized not in valid:
+        raise ValueError(f"Unknown preprocessing recipe {recipe!r}; expected one of {sorted(valid | {'auto'})}.")
+    return normalized
 
 
 def _recipe_defaults(recipe: str) -> dict[str, object]:
-    valid = {
-        "visium",
-        "visium_hd",
-        "generic",
-        "stereoseq",
-        "slide_seq",
-        "seqfish",
-        "merfish",
-        "xenium",
-        "atera",
-        "cosmx",
-        "imaging",
-        "pearson_residuals",
-        "sctransform",
-    }
-    if recipe not in valid:
-        raise ValueError(f"Unknown spatial preprocessing recipe {recipe!r}; expected one of {sorted(valid)}.")
+    """Return only analysis-method defaults; never infer QC from technology."""
     defaults = {
-        "use_in_tissue": False,
-        "coord_type": "generic",
-        "n_neighbors": 8,
-        "min_cells": 3,
-        "target_sum": 1e4,
         "feature_method": "hvg",
         "run_pca": True,
-        "min_counts": None,
-        "min_genes": None,
-        "max_pct_mt": None,
-        "adaptive_qc": False,
-        "radius": None,
     }
-    if recipe == "visium":
-        defaults.update(
-            {"use_in_tissue": True, "coord_type": "grid", "n_neighbors": 6, "min_counts": 100, "min_genes": 50}
-        )
-    elif recipe in {"visium_hd", "stereoseq"}:
-        defaults.update({"min_counts": 50, "min_genes": 20})
-    elif recipe == "slide_seq":
-        defaults.update({"min_counts": 20, "min_genes": 10, "feature_method": "hvg_svg_union"})
-    elif recipe in {"seqfish", "merfish", "xenium", "atera", "cosmx", "imaging"}:
-        defaults.update({"min_cells": 1, "min_counts": 10, "min_genes": 5})
-    elif recipe in {"pearson_residuals", "sctransform"}:
-        defaults.update({"adaptive_qc": False})
+    if recipe == "raw":
+        defaults.update({"feature_method": "all", "run_pca": False})
     return defaults
 
 
+def _technology_defaults(technology: str) -> dict[str, object]:
+    """Return graph topology hints that are safe to infer from a platform."""
+    if technology == "visium":
+        return {"use_in_tissue": True, "coord_type": "grid", "n_neighbors": 6}
+    return {"use_in_tissue": False, "coord_type": "generic", "n_neighbors": 8}
+
+
 class SpatialPreprocessor:
-    """Recipe-based preprocessor for spatial transcriptomics AnnData objects.
+    """Analysis-oriented preprocessor for spatial transcriptomics AnnData objects.
 
     Examples:
         >>> import spateo as st
         >>> adata = st.read_h5ad("sample.h5ad")
         >>> st.pp.preprocess_spatial(
         ...     adata,
-        ...     recipe="generic",
+        ...     recipe="standard",
         ...     spatial_key="spatial",
         ...     counts_layer="counts",
         ...     n_top_genes=3000,
         ... )
-        >>> st.pp.preprocess_spatial(
-        ...     adata,
-        ...     recipe="visium",
-        ...     spatial_key="spatial",
-        ...     in_tissue_key="in_tissue",
-        ...     feature_method="hvg_svg_union",
-        ... )
-        >>> st.pp.preprocess_spatial(adata, recipe="xenium", spatial_key="spatial", feature_method="hvg")
+        >>> st.pp.preprocess_spatial(adata, recipe="raw", spatial_key="spatial")
     """
 
     def __init__(
@@ -168,7 +158,7 @@ class SpatialPreprocessor:
         library_key: Optional[str] = None,
         sample_key: Optional[str] = None,
         in_tissue_key: str = "in_tissue",
-        target_sum: float = 1e4,
+        target_sum: Optional[float] = 1e4,
         min_counts: Optional[int] = None,
         max_counts: Optional[int] = None,
         min_genes: Optional[int] = None,
@@ -177,10 +167,10 @@ class SpatialPreprocessor:
         min_cells: int = 3,
         min_gene_counts: Optional[int] = None,
         n_top_genes: int = 3000,
-        feature_method: Literal["hvg", "svg", "hvg_svg_union", "hvg_svg_intersection", "all"] = "hvg",
+        feature_method: Optional[Literal["hvg", "svg", "hvg_svg_union", "hvg_svg_intersection", "all"]] = None,
         build_spatial_graph: bool = True,
         build_expression_graph: bool = False,
-        run_pca: bool = True,
+        run_pca: Optional[bool] = None,
         n_pca_components: int = 50,
         keep_filtered: bool = False,
         local_qc: bool = False,
@@ -198,7 +188,8 @@ class SpatialPreprocessor:
 
         Args:
             adata: Input AnnData object.
-            recipe: Spatial recipe name.
+            recipe: Analysis recipe: ``auto``, ``standard``, ``pearson_residuals``
+                or ``raw``. Acquisition technology is detected separately.
             spatial_key: Key in ``adata.obsm`` containing coordinates.
             layer: Input layer; ``None`` means ``adata.X``.
             counts_layer: Raw counts layer.
@@ -241,35 +232,31 @@ class SpatialPreprocessor:
             log1p_layer = self.log1p_layer
         library_key = library_key if library_key is not None else self.library_key
         sample_key = sample_key if sample_key is not None else self.sample_key
-        recipe = _infer_recipe(adata, recipe)
+        technology = _detect_technology(adata)
+        requested_recipe = recipe.lower()
+        requested_technology = _TECHNOLOGY_ALIASES.get(requested_recipe, requested_recipe)
+        if technology == "generic" and requested_technology in _LEGACY_TECHNOLOGY_RECIPES:
+            technology = requested_technology
+        recipe = _infer_recipe(recipe)
         defaults = _recipe_defaults(recipe)
+        technology_defaults = _technology_defaults(technology)
 
-        use_in_tissue = defaults["use_in_tissue"]
-        coord_type = defaults["coord_type"]
-        n_neighbors = spatial_n_neighbors or defaults["n_neighbors"]
-        radius = spatial_radius if spatial_radius is not None else defaults["radius"]
-        if min_cells == 3:
-            min_cells = defaults["min_cells"]
-        if min_counts is None:
-            min_counts = defaults["min_counts"]
-        if min_genes is None:
-            min_genes = defaults["min_genes"]
-        if max_pct_mt is None:
-            max_pct_mt = defaults["max_pct_mt"]
+        use_in_tissue = technology_defaults["use_in_tissue"]
+        coord_type = technology_defaults["coord_type"]
+        n_neighbors = spatial_n_neighbors or technology_defaults["n_neighbors"]
+        radius = spatial_radius
         if adaptive_qc is None:
-            adaptive_qc = defaults["adaptive_qc"]
-        if target_sum == 1e4:
-            target_sum = defaults["target_sum"]
-        if feature_method == "hvg":
+            adaptive_qc = False
+        if feature_method is None:
             feature_method = defaults["feature_method"]
-        if run_pca is True:
+        if run_pca is None:
             run_pca = defaults["run_pca"]
 
         target = adata if inplace else adata.copy()
         n_obs_before, n_vars_before = target.n_obs, target.n_vars
         steps: list[str] = []
         logger.log_time()
-        logger.info(f"Starting spatial preprocessing recipe `{recipe}`...")
+        logger.info(f"Starting spatial preprocessing recipe `{recipe}` for technology `{technology}`...")
 
         standardize_spatial_adata(
             target,
@@ -299,7 +286,6 @@ class SpatialPreprocessor:
                 inplace=True,
             )
             steps.append("spatial_neighbors")
-        if local_qc:
             flag_local_qc_outliers(target)
             steps.append("flag_local_qc_outliers")
 
@@ -351,40 +337,33 @@ class SpatialPreprocessor:
             pearson_residuals(target, layer=counts_layer, out_layer="pearson_residuals", inplace=True)
             pca_layer = "pearson_residuals"
             steps.append("pearson_residuals")
-        elif recipe == "sctransform":
-            run_sctransform(target, layer=counts_layer, out_layer="sctransform", inplace=True)
-            pca_layer = "sctransform"
-            steps.append("sctransform")
-        else:
-            calculate_size_factors(
-                target,
-                layer=counts_layer,
-                library_key=library_key,
-                target_sum=target_sum,
-                inplace=True,
-            )
-            steps.append("calculate_size_factors")
+        elif recipe == "standard":
             normalize_total(
                 target,
                 layer=counts_layer,
                 out_layer=normalized_layer,
                 target_sum=target_sum,
+                library_key=library_key,
                 inplace=True,
             )
             steps.append("normalize_total")
             log1p_layer_fn = globals()["log1p_layer"]
             log1p_layer_fn(target, layer=normalized_layer, out_layer=log1p_layer, set_X=True, inplace=True)
             steps.append("log1p_layer")
+        else:
+            pca_layer = counts_layer
 
-        select_spatial_features(
-            target,
-            layer=pca_layer,
-            method=feature_method,
-            n_top_genes=n_top_genes,
-            batch_key=sample_key or library_key,
-            inplace=True,
-        )
-        steps.append("select_spatial_features")
+        if recipe != "raw" or feature_method != "all" or run_pca:
+            select_spatial_features(
+                target,
+                layer=pca_layer if recipe != "raw" else counts_layer,
+                method=feature_method,
+                n_top_genes=n_top_genes,
+                batch_key=sample_key or library_key,
+                score_method="variance" if recipe == "pearson_residuals" else "dispersion",
+                inplace=True,
+            )
+            steps.append("select_spatial_features")
 
         if run_pca:
             pca(target, layer=pca_layer, n_pca_components=n_pca_components, inplace=True)
@@ -396,6 +375,7 @@ class SpatialPreprocessor:
         SKM.init_uns_spatial_namespace(target)
         target.uns[SKM.UNS_PP_KEY]["spatial_preprocess"] = {
             "recipe": recipe,
+            "technology": technology,
             "spatial_key": spatial_key,
             "counts_layer": counts_layer,
             "normalized_layer": normalized_layer,
@@ -466,7 +446,7 @@ def preprocess_spatial(adata: AnnData, **kwargs: object) -> Optional[AnnData]:
 
     Examples:
         >>> import spateo as st
-        >>> st.pp.preprocess_spatial(adata, recipe="generic", spatial_key="spatial")
+        >>> st.pp.preprocess_spatial(adata, recipe="standard", spatial_key="spatial")
 
     Args:
         adata: Input AnnData object.

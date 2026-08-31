@@ -25,8 +25,8 @@ from statsmodels.stats.outliers_influence import variance_inflation_factor
 
 from ...configuration import SKM
 from ...logging import logger_manager as lm
-from ...preprocessing.normalize import calcNormFactors
 from ...preprocessing.transform import log1p
+from ._normalization import calc_tmmwsp_factors
 from .distributions import Binomial, Gaussian, Link, NegativeBinomial, Poisson
 
 # from ...configuration import SKM
@@ -558,7 +558,7 @@ def library_scaling_factors(
 
     if offset is None:
         try:
-            nf = calcNormFactors(counts, method="TMMwsp")
+            nf = calc_tmmwsp_factors(counts)
         except:
             logger.info("TMMwsp normalization failed. Will use unnormalized library sizes as offset.")
             nf = np.ones(counts.shape[0])

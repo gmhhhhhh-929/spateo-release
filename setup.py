@@ -20,7 +20,7 @@ setup(
         "docs": read_requirements(os.path.join("docs", "requirements.txt")),
         "3d": read_requirements("3d-requirements.txt"),
     },
-    packages=find_packages(exclude=("tests", "docs")),
+    packages=find_packages(exclude=("tests", "tests.*", "docs", "docs.*")),
     python_requires=">=3.10,<3.13",
     classifiers=[
         "Development Status :: 4 - Beta",

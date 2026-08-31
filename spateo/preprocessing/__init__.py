@@ -5,7 +5,6 @@ from .feature import select_spatial_features
 from .filter import filter_by_coordinates, filter_cells, filter_genes
 from .graph import expression_neighbors, spatial_neighbors
 from .normalization import calculate_size_factors, normalize_total
-from .normalize import calcNormFactors, factor_normalization, select_hvf_seurat
 from .pca import pca
 from .preprocessor import Preprocessor, SpatialPreprocessor, preprocess_spatial
 from .qc import (
@@ -37,13 +36,10 @@ __all__ = [
     "pca",
     "spatial_neighbors",
     "expression_neighbors",
-    # Historical functions retained for downstream Spateo modules.
+    # Historical filtering/transformation functions retained for downstream modules.
     "filter_cells",
     "filter_genes",
     "filter_by_coordinates",
-    "select_hvf_seurat",
-    "factor_normalization",
-    "calcNormFactors",
     "log1p",
     "scale",
 ]
