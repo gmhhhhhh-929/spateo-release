@@ -1,5 +1,5 @@
-"""IO functions for SeqScope technology.
-"""
+"""IO functions for SeqScope technology."""
+
 import os
 from typing import Optional
 

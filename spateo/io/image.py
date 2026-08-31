@@ -1,5 +1,4 @@
-"""Image IO.
-"""
+"""Image IO."""
 
 from typing import Optional
 

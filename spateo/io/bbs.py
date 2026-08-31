@@ -1,5 +1,4 @@
-"""IO functions for calculating the bounding box.
-"""
+"""IO functions for calculating the bounding box."""
 
 import math
 from typing import List, Optional, Tuple, Union

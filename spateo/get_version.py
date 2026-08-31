@@ -1,7 +1,5 @@
-"""
-A minimalistic version helper in the spirit of versioneer, that is able to run without build step using pkg_resources.
-Developed by P Angerer, see https://github.com/flying-sheep/get_version.
-"""
+"""A minimal version helper that works from source and installed metadata."""
+
 # __version__ is defined at the very end of this file.
 
 import os
@@ -101,17 +99,17 @@ def get_version_from_git(parent):
 
 def get_version_from_metadata(name: str, parent: Optional[Path] = None):
     try:
-        from pkg_resources import DistributionNotFound, get_distribution
-    except ImportError:
+        from importlib.metadata import PackageNotFoundError, distribution
+    except ImportError:  # pragma: no cover - importlib.metadata is in Python 3.8+
         return None
 
     try:
-        pkg = get_distribution(name)
-    except DistributionNotFound:
+        pkg = distribution(name)
+    except PackageNotFoundError:
         return None
 
     # For an installed package, the parent is the install location
-    path_pkg = Path(pkg.location).resolve()
+    path_pkg = Path(pkg.locate_file("")).resolve()
     if parent is not None and path_pkg != parent.resolve():
         msg = f"""\
             metadata: Failed; distribution and package paths do not match:
@@ -163,28 +161,31 @@ def get_version(package: Union[Path, str]) -> str:
 
 
 def get_all_dependencies_version(display=True):
-    """
-    Adapted from answer 2 in
-    https://stackoverflow.com/questions/40428931/package-for-listing-version-of-packages-used-in-a-jupyter-notebook
-    """
+    """Return installed versions of Spateo's declared dependencies."""
+    from importlib.metadata import PackageNotFoundError, distribution, version
+
     import pandas as pd
-    import pkg_resources
     from IPython.display import display
+    from packaging.requirements import Requirement
 
-    _package_name = "dynamo-release"
-    _package = pkg_resources.working_set.by_key[_package_name]
-
-    all_dependencies = [str(r).split(">")[0] for r in _package.requires()]  # retrieve deps from setup.py
-    all_dependencies.sort(reverse=True)
-    all_dependencies.insert(0, "dynamo-release")
-
-    all_dependencies_list = []
-
-    for m in pkg_resources.working_set:
-        if m.project_name.lower() in all_dependencies:
-            all_dependencies_list.append([m.project_name, m.version])
-
-    df = pd.DataFrame(all_dependencies_list[::-1], columns=["package", "version"]).set_index("package").T
+    package_name = "spateo-release"
+    try:
+        package = distribution(package_name)
+    except PackageNotFoundError:
+        package_name = "dynamo-release"
+        package = distribution(package_name)
+    names = {package_name}
+    for requirement in package.requires or ():
+        parsed = Requirement(requirement)
+        if parsed.marker is None or parsed.marker.evaluate():
+            names.add(parsed.name)
+    rows = []
+    for name in sorted(names, key=str.lower):
+        try:
+            rows.append([name, version(name)])
+        except PackageNotFoundError:
+            rows.append([name, "not installed"])
+    df = pd.DataFrame(rows, columns=["package", "version"]).set_index("package").T
 
     if display:
         pd.options.display.max_columns = None

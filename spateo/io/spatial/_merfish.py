@@ -28,7 +28,18 @@ import sys
 import warnings
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import anndata as ad
 import h5py
@@ -36,7 +47,9 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import coo_matrix, csr_matrix
+
 from ...configuration import SKM
+
 try:
     import tifffile
 except Exception:  # pragma: no cover
@@ -47,6 +60,7 @@ from ..._registry import register_function
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
         HEADER = "\033[95m"
         BLUE = "\033[94m"
@@ -257,7 +271,11 @@ def _discover_merfish_assets(root: Path) -> Dict[str, Any]:
     transform_path = None
     if images_dir is not None:
         candidates = sorted(
-            [p for p in images_dir.rglob("*") if p.is_file() and "microntomosaicpixeltransform" in _normalize_token(p.name)],
+            [
+                p
+                for p in images_dir.rglob("*")
+                if p.is_file() and "microntomosaicpixeltransform" in _normalize_token(p.name)
+            ],
             key=_natural_sort_key,
         )
         transform_path = candidates[0] if candidates else None
@@ -378,7 +396,9 @@ def _canonicalize_detected_transcripts(df: pd.DataFrame) -> Tuple[pd.DataFrame, 
                 col_map[src] = name
                 return src
         if required:
-            raise KeyError(f"Could not find required transcript column for '{name}'. Available columns: {list(out.columns)}")
+            raise KeyError(
+                f"Could not find required transcript column for '{name}'. Available columns: {list(out.columns)}"
+            )
         return None
 
     gene_col = choose("gene", ["gene", "genename", "name"], required=True)
@@ -395,7 +415,11 @@ def _canonicalize_detected_transcripts(df: pd.DataFrame) -> Tuple[pd.DataFrame, 
         required=False,
     )
 
-    keep_cols = [c for c in [gene_col, fov_col, gx_col, gy_col, gz_col, x_col, y_col, transcript_id_col, entity_col] if c is not None]
+    keep_cols = [
+        c
+        for c in [gene_col, fov_col, gx_col, gy_col, gz_col, x_col, y_col, transcript_id_col, entity_col]
+        if c is not None
+    ]
     out = out[keep_cols].rename(columns={src: dst for src, dst in col_map.items()})
 
     out["gene"] = out["gene"].astype(str)
@@ -520,7 +544,9 @@ def _attach_cell_metadata(adata: AnnData, meta: Optional[pd.DataFrame], sample_k
         adata.obs["fov"] = adata.obs["fov"]
 
     if "center_x" in adata.obs.columns and "center_y" in adata.obs.columns:
-        xy = np.c_[pd.to_numeric(adata.obs["center_x"], errors="coerce"), pd.to_numeric(adata.obs["center_y"], errors="coerce")]
+        xy = np.c_[
+            pd.to_numeric(adata.obs["center_x"], errors="coerce"), pd.to_numeric(adata.obs["center_y"], errors="coerce")
+        ]
         adata.obsm["spatial"] = xy.astype(float, copy=False)
 
 
@@ -532,7 +558,9 @@ def _aggregate_transcripts_to_adata(
     dtype: str = "int32",
 ) -> Tuple[AnnData, Dict[str, Any]]:
     if len(transcripts) == 0:
-        adata = ad.AnnData(X=csr_matrix((0, 0), dtype=np.dtype(dtype)) if sparse else np.zeros((0, 0), dtype=np.dtype(dtype)))
+        adata = ad.AnnData(
+            X=csr_matrix((0, 0), dtype=np.dtype(dtype)) if sparse else np.zeros((0, 0), dtype=np.dtype(dtype))
+        )
         adata.obs["sample"] = []
         return adata, {"aggregation": "empty"}
 
@@ -642,7 +670,9 @@ def _discover_mosaic_images(images_dir: Optional[Path]) -> Dict[str, List[Tuple[
     return out
 
 
-def _resolve_selected_z(items: List[Tuple[int, Path]], z_layers: Optional[Union[int, Sequence[int]]]) -> List[Tuple[int, Path]]:
+def _resolve_selected_z(
+    items: List[Tuple[int, Path]], z_layers: Optional[Union[int, Sequence[int]]]
+) -> List[Tuple[int, Path]]:
     if z_layers is None:
         return []
     if isinstance(z_layers, (int, np.integer)):
@@ -690,7 +720,9 @@ def _attach_images(
     spatial_slot = adata.uns.setdefault("spatial", {}).setdefault(sample_key, {})
     spatial_slot.setdefault("metadata", {})
     spatial_slot["metadata"]["images_dir"] = str(images_dir) if images_dir is not None else None
-    spatial_slot["metadata"]["micron_to_mosaic_pixel_transform"] = str(transform_path) if transform_path is not None else None
+    spatial_slot["metadata"]["micron_to_mosaic_pixel_transform"] = (
+        str(transform_path) if transform_path is not None else None
+    )
 
     transform = _load_transform_matrix(transform_path)
     if transform is not None:
@@ -726,7 +758,9 @@ def _attach_images(
             spatial_slot.setdefault("image_z", {})[channel] = zs
         else:
             same_shape = len({tuple(np.shape(a)) for a in arrays}) == 1
-            spatial_slot["images"][channel] = np.stack(arrays, axis=0) if same_shape else {f"z{z}": a for z, a in zip(zs, arrays)}
+            spatial_slot["images"][channel] = (
+                np.stack(arrays, axis=0) if same_shape else {f"z{z}": a for z, a in zip(zs, arrays)}
+            )
             spatial_slot.setdefault("image_z", {})[channel] = zs
 
 
@@ -833,6 +867,7 @@ def _table_from_dataset_group(group: h5py.Group, source_file: str, source_group:
 def _parse_boundary_hdf5_file(path: Path) -> List[pd.DataFrame]:
     tables: List[pd.DataFrame] = []
     with h5py.File(path, "r") as f:
+
         def visit(group: h5py.Group, gpath: str) -> None:
             table = _table_from_dataset_group(group, source_file=path.name, source_group=gpath)
             if table is not None and len(table) > 0:
@@ -901,7 +936,9 @@ def _maybe_add_centroids_from_polygons(adata: AnnData, polygons: Optional[pd.Dat
     if tmp[["center_x", "center_y"]].notna().any().any():
         adata.obs["center_x"] = tmp["center_x"]
         adata.obs["center_y"] = tmp["center_y"]
-        adata.obsm["spatial"] = np.c_[pd.to_numeric(adata.obs["center_x"], errors="coerce"), pd.to_numeric(adata.obs["center_y"], errors="coerce")]
+        adata.obsm["spatial"] = np.c_[
+            pd.to_numeric(adata.obs["center_x"], errors="coerce"), pd.to_numeric(adata.obs["center_y"], errors="coerce")
+        ]
 
 
 def _empty_adata() -> AnnData:
@@ -1016,7 +1053,9 @@ def read_merfish(
             "column_mapping": colmap,
             "n_rows": int(len(transcripts_df)),
             "n_genes": int(transcripts_df["gene"].nunique()) if len(transcripts_df) else 0,
-            "n_fovs": int(transcripts_df["fov"].nunique()) if "fov" in transcripts_df.columns and len(transcripts_df) else 0,
+            "n_fovs": (
+                int(transcripts_df["fov"].nunique()) if "fov" in transcripts_df.columns and len(transcripts_df) else 0
+            ),
         }
     elif detected_path is None:
         warnings.warn(
@@ -1032,10 +1071,10 @@ def read_merfish(
     meta = _prepare_cell_metadata(meta_path)
     _attach_cell_metadata(adata, meta, sample_key=sample_key)
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
     adata.uns.setdefault("spatial", {})
     spatial_slot = adata.uns["spatial"].setdefault(sample_key, {})

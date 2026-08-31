@@ -2,7 +2,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
-from spateo.io.spatial.auto import detect_spatial_technologies, detect_spatial_technology
+from spateo.io.spatial.auto import (
+    detect_spatial_technologies,
+    detect_spatial_technology,
+)
 
 
 class TestSpatialAuto(TestCase):

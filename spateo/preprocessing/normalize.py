@@ -1,6 +1,7 @@
 """
 Functions to either scale single-cell data or normalize such that the row-wise sums are identical.
 """
+
 import inspect
 import math
 import warnings
@@ -631,7 +632,6 @@ def calc_mean_and_var(X: Union[csr_matrix, np.ndarray], axis: int):
 
 
 def calc_expm1(X: Union[csr_matrix, np.ndarray]) -> np.ndarray:
-
     """
     exponential minus one
 

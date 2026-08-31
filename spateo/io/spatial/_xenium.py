@@ -1,4 +1,5 @@
-"""10x Xenium In Situ reader for Spateo spatial I/O.Adapted from https://github.com/omicverse/omicverse/blob/master/omicverse/io/spatial/_xenium.py"""
+"""10x Xenium In Situ reader for Spateo spatial I/O."""
+
 from __future__ import annotations
 
 import json
@@ -11,14 +12,16 @@ import pandas as pd
 from anndata import AnnData
 
 from ..._registry import register_function
-from ..single import read_10x_h5
 
 # spateo key
 from ...configuration import SKM
+from ..single import read_10x_h5
+from ._provenance import record_spatial_io, spatial_file_manifest
 
 try:
     from ..._settings import Colors
 except Exception:  # pragma: no cover
+
     class Colors:
         HEADER = "\033[95m"
         BLUE = "\033[94m"
@@ -57,15 +60,21 @@ def _read_cells_table(path: Path) -> pd.DataFrame:
 def _boundaries_to_wkt(
     root: Path,
     cell_index: pd.Index,
+    boundary_stem: str = "cell_boundaries",
 ) -> Optional[pd.Series]:
     """Turn ``cell_boundaries.parquet`` / ``.csv.gz`` into per-cell WKT polygons.
 
     Xenium ships cell boundaries as a long table — one row per polygon vertex,
     with columns ``cell_id``, ``vertex_x``, ``vertex_y`` (all in microns). We
     group by ``cell_id``, close the ring if needed, and emit a WKT ``POLYGON``
-    string. 
+    string.
     """
-    path = _resolve(root, "cell_boundaries.parquet", "cell_boundaries.csv.gz", "cell_boundaries.csv")
+    path = _resolve(
+        root,
+        f"{boundary_stem}.parquet",
+        f"{boundary_stem}.csv.gz",
+        f"{boundary_stem}.csv",
+    )
     if path is None:
         return None
 
@@ -81,8 +90,7 @@ def _boundaries_to_wkt(
     id_col = next((c for c in ("cell_id", "cellID", "CellID", "cell_ID") if c in bnd.columns), None)
     if id_col is None or "vertex_x" not in bnd.columns or "vertex_y" not in bnd.columns:
         warnings.warn(
-            f"Unexpected columns in {path.name}: {list(bnd.columns)}; expected "
-            "`cell_id`, `vertex_x`, `vertex_y`."
+            f"Unexpected columns in {path.name}: {list(bnd.columns)}; expected " "`cell_id`, `vertex_x`, `vertex_y`."
         )
         return None
 
@@ -146,7 +154,9 @@ def _load_morphology_image(
         try:
             import tifffile
 
-            with tifffile.TiffFile(cand) as tif:
+            # V2+ OME XML may cross-reference sibling channel files. Treating
+            # each file as a standalone TIFF preserves its local pyramid.
+            with tifffile.TiffFile(cand, is_ome=False) as tif:
                 series = tif.series[0]
                 levels = getattr(series, "levels", None) or [series]
                 # Full-res is levels[0]; walk down pyramid until both dims fit.
@@ -227,7 +237,7 @@ def read_xenium(
         ``experiment.xenium``'s ``region_name`` / ``run_name`` if present, else the
         directory name.
     load_image
-        When ``True`` and ``tifffile`` is installed, loads the morphology image 
+        When ``True`` and ``tifffile`` is installed, loads the morphology image
     image_key
         Which morphology image to prefer when both ``morphology_focus`` and
         ``morphology_mip`` are shipped. One of ``'morphology_focus'``,
@@ -241,7 +251,7 @@ def read_xenium(
     load_boundaries
         When ``True`` and ``cell_boundaries.parquet`` / ``.csv.gz`` is present,
         converts per-cell polygon vertices to WKT strings stored in
-        ``obs['geometry']`` 
+        ``obs['geometry']``
     cache_file
         Optional path to an ``.h5ad`` cache. When set and the file exists, we
         read it back instead of re-parsing the outs directory (skipping the
@@ -269,6 +279,7 @@ def read_xenium(
         cache_path = Path(cache_file).expanduser().resolve()
         if cache_path.exists():
             import anndata as _ad
+
             _progress(f"Reading cached AnnData from: {cache_path}")
             return _ad.read_h5ad(cache_path)
     else:
@@ -288,15 +299,13 @@ def read_xenium(
 
     adata = read_10x_h5(str(mat_path))
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
     if hasattr(adata.var, "columns") and "feature_types" in adata.var.columns:
-        non_gene = adata.var["feature_types"].isin(
-            ["Gene Expression", "Multiplexing Capture", "Antibody Capture"]
-        )
+        non_gene = adata.var["feature_types"].isin(["Gene Expression", "Multiplexing Capture", "Antibody Capture"])
         # Keep only Gene Expression targets — drop control probes / codewords so
         # downstream QC / HVG / PCA don't waste capacity on them.
         gene_mask = adata.var["feature_types"] == "Gene Expression"
@@ -336,17 +345,17 @@ def read_xenium(
             "Could not find centroid columns in cells metadata. "
             f"Expected one of {xy_pairs}, found {list(cells.columns)}."
         )
-    adata.obsm["spatial"] = cells[list(xy)].to_numpy(dtype=np.float32)
-    adata.obs = cells.drop(columns=list(xy))
+    coordinates = cells[list(xy)].to_numpy(dtype=np.float32)
+    if not np.isfinite(coordinates).all():
+        raise ValueError("Xenium centroid coordinates contain NaN or infinite values.")
+    adata.obsm["spatial"] = coordinates
+    # Retain centroid columns in obs as source metadata as well as exposing the
+    # canonical numeric coordinate matrix in obsm.
+    adata.obs = cells.copy()
 
     exp_meta = _load_experiment_metadata(root)
     if library_id is None:
-        library_id = (
-            exp_meta.get("region_name")
-            or exp_meta.get("run_name")
-            or root.name
-            or "xenium"
-        )
+        library_id = exp_meta.get("region_name") or exp_meta.get("run_name") or root.name or "xenium"
     library_id = str(library_id).strip() or "xenium"
 
     pixel_size_um = float(exp_meta.get("pixel_size", 0.2125))
@@ -378,16 +387,11 @@ def read_xenium(
         loaded = _load_morphology_image(root, image_key, max_dim=image_max_dim)
         if loaded is not None:
             img, downsample = loaded
-            _progress(
-                f"Loaded morphology image {img.shape} "
-                f"(pyramid downsample {downsample:.4f}) from {root}"
-            )
+            _progress(f"Loaded morphology image {img.shape} " f"(pyramid downsample {downsample:.4f}) from {root}")
             uns_spatial["images"]["hires"] = img
             # Rescale so that micron × scalef lands on the downsampled image.
             uns_spatial["scalefactors"]["tissue_hires_scalef"] = hires_scalef * downsample
-            uns_spatial["scalefactors"]["spot_diameter_fullres"] = (
-                spot_diameter_fullres * downsample
-            )
+            uns_spatial["scalefactors"]["spot_diameter_fullres"] = spot_diameter_fullres * downsample
         else:
             _progress("No morphology image loaded (set load_image=False to silence).", level="warn")
 
@@ -398,18 +402,24 @@ def read_xenium(
             adata.obs["geometry"] = wkts.values
             has_geometry = bool((wkts != "").any())
             if has_geometry:
-                _progress(
-                    f"Loaded cell polygons (geometry WKT) for "
-                    f"{int((wkts != '').sum())}/{len(wkts)} cells"
-                )
+                _progress(f"Loaded cell polygons (geometry WKT) for " f"{int((wkts != '').sum())}/{len(wkts)} cells")
             else:
                 _progress("cell_boundaries present but no valid polygons extracted.", level="warn")
 
     adata.uns["spatial"] = {library_id: uns_spatial}
-    adata.uns["spateo_io"] = {
-        "type": "xenium_seg" if has_geometry else "xenium",
-        "library_id": library_id,
-    }
+    record_spatial_io(
+        adata,
+        technology="xenium",
+        source=root,
+        reader="spateo.io.spatial.read_xenium",
+        manifest=spatial_file_manifest(root),
+    )
+    adata.uns["spateo_io"].update(
+        {
+            "type": "xenium_seg" if has_geometry else "xenium",
+            "library_id": library_id,
+        }
+    )
 
     if cache_path is not None:
         try:

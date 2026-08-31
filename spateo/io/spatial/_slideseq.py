@@ -26,16 +26,17 @@ from ...configuration import SKM
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
-        HEADER = '\033[95m'
-        BLUE = '\033[94m'
-        CYAN = '\033[96m'
-        GREEN = '\033[92m'
-        WARNING = '\033[93m'
-        FAIL = '\033[91m'
-        ENDC = '\033[0m'
-        BOLD = '\033[1m'
-        UNDERLINE = '\033[4m'
+        HEADER = "\033[95m"
+        BLUE = "\033[94m"
+        CYAN = "\033[96m"
+        GREEN = "\033[92m"
+        WARNING = "\033[93m"
+        FAIL = "\033[91m"
+        ENDC = "\033[0m"
+        BOLD = "\033[1m"
+        UNDERLINE = "\033[4m"
 
 
 _DEFAULT_COUNTS_CANDIDATES = (
@@ -178,9 +179,17 @@ def _drop_empty_unnamed_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _name_like_columns() -> List[str]:
     return [
-        "barcode", "barcodes", "Barcode", "Barcodes",
-        "bead_barcode", "bead_barcodes", "bead", "Bead",
-        "NAME", "name", "Name",
+        "barcode",
+        "barcodes",
+        "Barcode",
+        "Barcodes",
+        "bead_barcode",
+        "bead_barcodes",
+        "bead",
+        "Bead",
+        "NAME",
+        "name",
+        "Name",
     ]
 
 
@@ -211,8 +220,7 @@ def _set_name_index(df: pd.DataFrame) -> pd.DataFrame:
         df[name_col] = df[name_col].astype(str)
         if df[name_col].duplicated().any():
             warnings.warn(
-                f"Found duplicated bead/barcode names in column '{name_col}'. "
-                "Keeping the first occurrence."
+                f"Found duplicated bead/barcode names in column '{name_col}'. " "Keeping the first occurrence."
             )
             df = df.drop_duplicates(subset=[name_col], keep="first")
         df = df.set_index(name_col)
@@ -247,8 +255,7 @@ def _resolve_bead_file(root: Path, bead_file: Optional[str] = None) -> Path:
     p = _find_first_existing(root, _DEFAULT_BEAD_CANDIDATES)
     if p is None:
         raise FileNotFoundError(
-            f"Could not find Slide-seq bead file under {root}. "
-            f"Expected one of: {list(_DEFAULT_BEAD_CANDIDATES)}"
+            f"Could not find Slide-seq bead file under {root}. " f"Expected one of: {list(_DEFAULT_BEAD_CANDIDATES)}"
         )
     return p
 
@@ -281,10 +288,7 @@ def _read_slideseq_counts(
 
     if obs_names.duplicated().any():
         dup_names = obs_names[obs_names.duplicated()].tolist()
-        raise ValueError(
-            "Duplicated barcode names detected in counts columns. "
-            f"Examples: {dup_names[:10]}"
-        )
+        raise ValueError("Duplicated barcode names detected in counts columns. " f"Examples: {dup_names[:10]}")
 
     expr = expr.apply(pd.to_numeric, errors="coerce").fillna(0)
     matrix = expr.to_numpy(dtype=dtype).T  # beads x genes
@@ -311,8 +315,7 @@ def _read_slideseq_beads(path: Path) -> pd.DataFrame:
     coord_cols = _find_coord_cols(df)
     if len(coord_cols) < 2:
         raise ValueError(
-            f"Could not detect coordinate columns in {path}. "
-            "Expected columns like 'xcoord'/'ycoord' or 'x'/'y'."
+            f"Could not detect coordinate columns in {path}. " "Expected columns like 'xcoord'/'ycoord' or 'x'/'y'."
         )
 
     df[coord_cols[0]] = pd.to_numeric(df[coord_cols[0]], errors="coerce")
@@ -482,15 +485,14 @@ def read_slideseq(
     # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
     _progress(f"Loading bead table: {bead_path.name}")
     bead_df = _read_slideseq_beads(bead_path)
     coord_cols = _find_coord_cols(bead_df)
     if len(coord_cols) < 2:
         raise ValueError(
-            f"Could not find X/Y coordinate columns in {bead_path}. "
-            f"Available columns: {list(bead_df.columns)}"
+            f"Could not find X/Y coordinate columns in {bead_path}. " f"Available columns: {list(bead_df.columns)}"
         )
 
     common_barcodes = adata.obs_names.intersection(bead_df.index)
@@ -552,6 +554,6 @@ def read_slideseq(
             "spatial_key": "spatial",
         }
     )
-    
+
     _progress(f"Done (n_obs={adata.n_obs}, n_vars={adata.n_vars})", level="success")
     return adata

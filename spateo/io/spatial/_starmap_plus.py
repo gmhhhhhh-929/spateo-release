@@ -17,6 +17,7 @@ from ...configuration import SKM
 try:
     from ..._settings import Colors
 except Exception:  # pragma: no cover
+
     class Colors:
         """Fallback ANSI color codes when spateo._settings import is unavailable."""
 
@@ -119,7 +120,19 @@ def _normalize_names(index) -> pd.Index:
 
 
 def _find_name_col(df: pd.DataFrame) -> Optional[str]:
-    for col in ("NAME", "name", "Name", "cell_id", "CellID", "cellid", "spot_id", "SpotID", "spotid", "barcode", "Barcode"):
+    for col in (
+        "NAME",
+        "name",
+        "Name",
+        "cell_id",
+        "CellID",
+        "cellid",
+        "spot_id",
+        "SpotID",
+        "spotid",
+        "barcode",
+        "Barcode",
+    ):
         if col in df.columns:
             return col
     return None
@@ -296,8 +309,8 @@ def read_starmap_plus(
     sample = root.name
 
     expr_path = root / counts_file
-    spatial_path = (root / spatial_file) if spatial_file is not None else _resolve(
-        root, *_build_candidates(prefix, "spatial")
+    spatial_path = (
+        (root / spatial_file) if spatial_file is not None else _resolve(root, *_build_candidates(prefix, "spatial"))
     )
     spot_meta_path = _resolve(root, *_build_candidates(prefix, "spot_meta"))
     metadata_file = _resolve(root, meta_file)
@@ -314,7 +327,7 @@ def read_starmap_plus(
     # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level="step")
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
     adata.obs_names = _normalize_names(adata.obs_names)
 

@@ -14,12 +14,14 @@ import pandas as pd
 from anndata import AnnData
 from PIL import Image
 from scipy.sparse import csr_matrix
-from ...configuration import SKM
+
 from ..._registry import register_function
+from ...configuration import SKM
 
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
         """Fallback ANSI color codes when spateo._settings import is unavailable."""
 
@@ -57,15 +59,19 @@ def _find_first_column(df: pd.DataFrame, candidates: tuple[str, ...], context: s
 
 def _find_xy_columns(df: pd.DataFrame, kind: str) -> Optional[tuple[str, str]]:
     pairs = (
-        ("CenterX_local_px", "CenterY_local_px"),
-        ("centerx_local_px", "centery_local_px"),
-        ("center_x_local_px", "center_y_local_px"),
-        ("CenterX", "CenterY"),
-    ) if kind == "local" else (
-        ("CenterX_global_px", "CenterY_global_px"),
-        ("centerx_global_px", "centery_global_px"),
-        ("center_x_global_px", "center_y_global_px"),
-        ("x_global_px", "y_global_px"),
+        (
+            ("CenterX_local_px", "CenterY_local_px"),
+            ("centerx_local_px", "centery_local_px"),
+            ("center_x_local_px", "center_y_local_px"),
+            ("CenterX", "CenterY"),
+        )
+        if kind == "local"
+        else (
+            ("CenterX_global_px", "CenterY_global_px"),
+            ("centerx_global_px", "centery_global_px"),
+            ("center_x_global_px", "center_y_global_px"),
+            ("x_global_px", "y_global_px"),
+        )
     )
     for x_col, y_col in pairs:
         if x_col in df.columns and y_col in df.columns:
@@ -126,8 +132,7 @@ def _points_to_wkt(points: list[tuple[float, float]]) -> str:
         from shapely.geometry import Polygon
     except Exception as exc:
         raise ImportError(
-            "Converting Nanostring polygon points to WKT requires `shapely`. "
-            "Install with: pip install shapely"
+            "Converting Nanostring polygon points to WKT requires `shapely`. " "Install with: pip install shapely"
         ) from exc
 
     poly = Polygon(points)
@@ -375,22 +380,14 @@ def read_nanostring(
         raise FileNotFoundError(f"Metadata file not found: {meta_path}")
 
     counts = pd.read_csv(counts_path, header=0)
-    counts_cell_id = _find_first_column(
-        counts, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (counts)"
-    )
-    counts_fov = _find_first_column(
-        counts, ("fov", "FOV", "fov_id", "fovID"), context="fov (counts)"
-    )
+    counts_cell_id = _find_first_column(counts, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (counts)")
+    counts_fov = _find_first_column(counts, ("fov", "FOV", "fov_id", "fovID"), context="fov (counts)")
     counts = counts.set_index(counts_cell_id)
     counts.index = counts.index.astype(str).str.cat(counts.pop(counts_fov).astype(str).values, sep="_")
 
     obs = pd.read_csv(meta_path, header=0)
-    obs_cell_id = _find_first_column(
-        obs, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (metadata)"
-    )
-    obs_fov = _find_first_column(
-        obs, ("fov", "FOV", "fov_id", "fovID"), context="fov (metadata)"
-    )
+    obs_cell_id = _find_first_column(obs, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (metadata)")
+    obs_fov = _find_first_column(obs, ("fov", "FOV", "fov_id", "fovID"), context="fov (metadata)")
     obs = obs.set_index(obs_cell_id)
     obs[obs_fov] = pd.Categorical(obs[obs_fov].astype(str))
     # Keep original cell_ID column for segmentation label matching.
@@ -400,9 +397,7 @@ def read_nanostring(
 
     common_index = obs.index.intersection(counts.index)
     if len(common_index) == 0:
-        raise ValueError(
-            "No overlapping cell IDs between counts and metadata after combining with FOV suffix."
-        )
+        raise ValueError("No overlapping cell IDs between counts and metadata after combining with FOV suffix.")
 
     _progress(f"Matched cells: {len(common_index)}")
     adata = AnnData(
@@ -411,10 +406,10 @@ def read_nanostring(
         uns={"spatial": {}},
     )
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
     adata.var_names = counts.columns.astype(str)
     local_xy = _find_xy_columns(adata.obs, kind="local")
@@ -430,9 +425,7 @@ def read_nanostring(
     if global_xy is not None:
         adata.obsm["spatial_fov"] = adata.obs[list(global_xy)].to_numpy()
     else:
-        warnings.warn(
-            "Global coordinate columns not found in metadata; `obsm['spatial_fov']` will not be created."
-        )
+        warnings.warn("Global coordinate columns not found in metadata; `obsm['spatial_fov']` will not be created.")
 
     geometry_wkt = _extract_geometry_wkt_from_obs(adata.obs)
     has_geometry = geometry_wkt is not None
@@ -446,6 +439,7 @@ def read_nanostring(
 
     _progress("Loading optional FOV images")
     from tqdm import tqdm
+
     file_extensions = (".jpg", ".png", ".jpeg", ".tif", ".tiff")
     fov_pattern = re.compile(r".*_F(\d+)")
     for subdir, kind in (("CellComposite", "hires"), ("CellLabels", "segmentation")):
@@ -466,9 +460,7 @@ def read_nanostring(
 
     if has_geometry:
         adata.obs["geometry"] = geometry_wkt
-        _progress(
-            f"Detected cell contours in metadata (geometry WKT generated for {(geometry_wkt != '').sum()} cells)"
-        )
+        _progress(f"Detected cell contours in metadata (geometry WKT generated for {(geometry_wkt != '').sum()} cells)")
     else:
         geometry_wkt = _geometry_from_segmentation_images(adata, fov_key=obs_fov, cell_id_key="cell_ID")
         if geometry_wkt is not None:
@@ -509,5 +501,6 @@ def read_nanostring(
         adata.uns["spateo_io"] = {"type": "nanostring"}
     _progress(f"Done (n_obs={adata.n_obs}, n_vars={adata.n_vars})", level="success")
     return adata
+
 
 __all__ = ["read_nanostring"]

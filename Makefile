@@ -18,16 +18,15 @@ install-docs:
 install-all: install-dev install-docs install
 
 test:
-	rm -f .coverage
-	pytest --verbose --cov=spateo \
-		tests/* \
-		tests/io/* \
-		tests/preprocessing/* \
-		tests/segmentation/* \
-		tests/tools/*
+	pytest --verbose --cov=spateo tests
 
 check:
-	isort --profile black --check spateo tests && black --check spateo tests && echo OK
+	python -m compileall -q spateo
+	isort --profile black --check spateo/io spateo/preprocessing tests/io tests/preprocessing \
+		skills/setup-spateo-environment/scripts/verify_environment.py spateo/get_version.py
+	black --check spateo/io spateo/preprocessing tests/io tests/preprocessing \
+		skills/setup-spateo-environment/scripts/verify_environment.py spateo/get_version.py
+	@echo OK
 
 build:
 	python setup.py sdist

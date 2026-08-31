@@ -40,6 +40,7 @@ from ._utils import (
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
         """Fallback ANSI color codes when spatego._settings import is unavailable."""
 
@@ -408,9 +409,7 @@ def read_bgi_agg(
         image = skimage.io.imread(stain_file)
 
         if prealigned:
-            warnings.warn(
-                "Assuming stain image is already aligned to the minimum RNA coordinates (prealigned=True)."
-            )
+            warnings.warn("Assuming stain image is already aligned to the minimum RNA coordinates (prealigned=True).")
             image = _pad_image_xy(image, pad_before_xy=(x_min, y_min))
 
         x_max = max(x_max, image.shape[0] - 1)
@@ -618,7 +617,9 @@ def read_bgi(
             label_coords["y"] += y_min
 
         if seg_binsize > 1:
-            warnings.warn("Binning was used during segmentation; expanding label coordinates to match read-level pixels.")
+            warnings.warn(
+                "Binning was used during segmentation; expanding label coordinates to match read-level pixels."
+            )
             coords_dfs = []
             for i in range(seg_binsize):
                 for j in range(seg_binsize):
@@ -651,7 +652,7 @@ def read_bgi(
     var = pd.DataFrame(index=pd.Index(uniq_gene, dtype="object"))
     adata = AnnData(X=X, obs=obs, var=var, layers=layers)
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     _initialize_spatial_metadata(
         adata,
@@ -676,6 +677,6 @@ def read_bgi(
             adata.obsm["contour"] = ordered_props["contour"].values
         if bbox_cols:
             adata.obsm["bbox"] = ordered_props[bbox_cols].to_numpy()
-    
+
     _progress(f"Done (n_obs={adata.n_obs}, n_vars={adata.n_vars})", level="success")
     return adata

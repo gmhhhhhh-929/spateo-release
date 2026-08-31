@@ -1,4 +1,3 @@
-
 """
 Data reading functions for seqFISH.
 
@@ -26,12 +25,24 @@ import sys
 import warnings
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import csr_matrix
+
 from ...configuration import SKM
 
 try:
@@ -59,6 +70,7 @@ from ..._registry import register_function
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
         HEADER = "\033[95m"
         BLUE = "\033[94m"
@@ -216,8 +228,18 @@ def _read_table_with_auto_sep(path: Path, **kwargs) -> pd.DataFrame:
 
 def _guess_cell_id_column(df: pd.DataFrame) -> Optional[str]:
     priority = {
-        "cellid", "cell", "cellindex", "entityid", "entity", "id", "label", "celllabel", "cell_id", "cell_index",
-        "unnamed0", "index"
+        "cellid",
+        "cell",
+        "cellindex",
+        "entityid",
+        "entity",
+        "id",
+        "label",
+        "celllabel",
+        "cell_id",
+        "cell_index",
+        "unnamed0",
+        "index",
     }
     for col in df.columns:
         norm = _normalize_token(col)
@@ -247,9 +269,7 @@ def _guess_xy_columns(df: pd.DataFrame) -> Tuple[Optional[str], Optional[str], O
 
 
 def _guess_gene_column(df: pd.DataFrame) -> Optional[str]:
-    aliases = (
-        "gene", "genename", "genes", "target", "targetgene", "feature", "featurename", "name"
-    )
+    aliases = ("gene", "genename", "genes", "target", "targetgene", "feature", "featurename", "name")
     norm_to_col = {_normalize_token(c): c for c in df.columns}
     return next((norm_to_col[a] for a in aliases if a in norm_to_col), None)
 
@@ -278,7 +298,7 @@ def _clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _parse_group_after_match(stem: str, match: re.Match) -> str:
-    suffix = stem[match.end():]
+    suffix = stem[match.end() :]
     suffix = re.sub(r"^[\s_\-\.]+", "", suffix)
     suffix = re.sub(r"[\s_\-\.]+$", "", suffix)
     return suffix
@@ -672,14 +692,12 @@ def read_seqfish(
     _progress(f"Loading counts matrix: {counts_path.name}")
     adata = _prepare_counts(counts_path, expected_ids=meta.index)
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
-    adata.X = csr_matrix(
-        np.asarray(adata.X.todense() if hasattr(adata.X, "todense") else adata.X, dtype=np.float32)
-    )
+    adata.X = csr_matrix(np.asarray(adata.X.todense() if hasattr(adata.X, "todense") else adata.X, dtype=np.float32))
     adata.obs["region"] = sample_key
     adata.obs["dataset"] = root.name
     adata.var_names = pd.Index(pd.Series(adata.var_names.astype(str)).astype(str))

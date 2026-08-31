@@ -1,5 +1,5 @@
-"""IO utility functions.
-"""
+"""IO utility functions."""
+
 import math
 from typing import Optional, Tuple, Union
 

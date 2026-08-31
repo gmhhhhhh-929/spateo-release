@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import pandas as pd
 from anndata import AnnData
+
 from ..._registry import register_function
 from ...configuration import SKM
 
@@ -161,10 +162,12 @@ def _read_v3_10x_h5(f: h5py.File) -> AnnData:
     if "gene_id" not in dsets:
         var_dict["gene_ids"] = dsets["id"].astype(str)
     else:
-        var_dict.update({
-            "gene_ids": dsets["gene_id"].astype(str),
-            "probe_ids": dsets["id"].astype(str),
-        })
+        var_dict.update(
+            {
+                "gene_ids": dsets["gene_id"].astype(str),
+                "probe_ids": dsets["id"].astype(str),
+            }
+        )
     var_dict["feature_types"] = dsets["feature_type"].astype(str)
     if "filtered_barcodes" in f["matrix"]:
         obs_dict["filtered_barcodes"] = dsets["filtered_barcodes"].astype(bool)
@@ -173,9 +176,7 @@ def _read_v3_10x_h5(f: h5py.File) -> AnnData:
         var_dict.update(
             (
                 feature_metadata_name,
-                dsets[feature_metadata_name].astype(
-                    bool if feature_metadata_item.dtype.kind == "b" else str
-                ),
+                dsets[feature_metadata_name].astype(bool if feature_metadata_item.dtype.kind == "b" else str),
             )
             for feature_metadata_name, feature_metadata_item in f["matrix"]["features"].items()
             if isinstance(feature_metadata_item, h5py.Dataset)
@@ -201,10 +202,7 @@ def _read_legacy_10x_h5(f: h5py.File, genome: str | None) -> AnnData:
             )
         genome = children[0]
     elif genome not in children:
-        raise ValueError(
-            f"Could not find genome {genome!r} in {f.filename}. "
-            f"Available genomes are: {children}"
-        )
+        raise ValueError(f"Could not find genome {genome!r} in {f.filename}. " f"Available genomes are: {children}")
 
     dsets = {}
     _collect_datasets(dsets, f[genome])

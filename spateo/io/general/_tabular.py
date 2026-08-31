@@ -4,15 +4,15 @@ from ..._registry import register_function
 
 
 @register_function(
-    aliases=['读取CSV', 'read_csv', 'csv reader'],
+    aliases=["读取CSV", "read_csv", "csv reader"],
     category="utils",
     description="Thin wrapper around pandas.read_csv used across OmicVerse tutorials for reproducible tabular input handling.",
     prerequisites={},
     requires={},
     produces={},
-    auto_fix='none',
+    auto_fix="none",
     examples=['ov.utils.read_csv("metadata.csv", index_col=0)'],
-    related=['utils.save', 'utils.load']
+    related=["utils.save", "utils.load"],
 )
 def read_csv(**kwargs):
     """

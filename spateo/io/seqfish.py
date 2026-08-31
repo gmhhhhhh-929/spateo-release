@@ -1,114 +1,78 @@
-"""IO functions for seqFISH-PLUS technology.
-"""
+"""Compatibility API for the maintained seqFISH reader."""
+
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from ..configuration import SKM
-from ..logging import logger_manager as lm
+from .spatial._seqfish import read_seqfish as _read_seqfish
 
 
 def read_seqfish_meta_as_dataframe(
-    path: str, fov_offset: pd.DataFrame = None, accumulate_x: bool = False, accumulate_y: bool = False
+    path: str,
+    fov_offset: Optional[pd.DataFrame] = None,
+    accumulate_x: bool = False,
+    accumulate_y: bool = False,
 ) -> pd.DataFrame:
-    """Read a seqFISH cell centroid locations file.
-
-    Args:
-        path: Path to file
-        fov_offset: a dataframe contains the x/y offset of each fov (field of view), for example,
-            {'fov':[fov_1, ..], 'x_offset':[x_offset_1, ..], 'y_offset':[y_offset_1, ..]}
-        accumulate_x: whether to accumulate x_offset
-        accumulate_y: whether to accumulate y_offset
-
-    Return:
-        Pandas DataFrame with the following columns.
-            * `fov`: ID of field of view
-            * `cell_id`: ID of cell in each fov
-            * `x`, `y`: X, Y coordinates of the cell centroids
-            * `region`: sample region(tissue)
-    """
-    dtype = {
-        "Field of View": np.uint8,
-        "Cell ID": np.uint16,
-        "X": np.float32,
-        "Y": np.float32,
-        "Region": "category",
-    }
-    df_loc = pd.read_csv(
-        path,
-        dtype=dtype,
+    """Read and standardize the historical seqFISH centroid table."""
+    frame = pd.read_csv(path).rename(
+        columns={
+            "Field of View": "fov",
+            "Cell ID": "cell_id",
+            "X": "x",
+            "Y": "y",
+            "Region": "region",
+        }
     )
-
-    rename = {
-        "Field of View": "fov",
-        "Cell ID": "cell_id",
-        "X": "x",
-        "Y": "y",
-        "Region": "region",
-    }
-    df_loc = df_loc.rename(columns=rename)
-
+    required = {"fov", "cell_id", "x", "y"}
+    if missing := sorted(required - set(frame.columns)):
+        raise ValueError(f"seqFISH metadata is missing required columns: {missing}")
     if fov_offset is not None:
+        offsets = fov_offset.copy()
+        required_offsets = {"fov", "x_offset", "y_offset"}
+        if missing := sorted(required_offsets - set(offsets.columns)):
+            raise ValueError(f"seqFISH FOV offsets are missing columns: {missing}")
         if accumulate_x:
-            for i in range(1, fov_offset.shape[0]):
-                fov_offset["x_offset"][i] = fov_offset["x_offset"][i] + fov_offset["x_offset"][i - 1]
+            offsets["x_offset"] = offsets["x_offset"].cumsum()
         if accumulate_y:
-            for i in range(1, fov_offset.shape[0]):
-                fov_offset["y_offset"][i] = fov_offset["y_offset"][i] + fov_offset["y_offset"][i - 1]
-
-        for i in range(fov_offset.shape[0]):
-            df_loc["x"][df_loc["fov"] == fov_offset["fov"][i]] = (
-                df_loc["x"][df_loc["fov"] == fov_offset["fov"][i]] + fov_offset["x_offset"][i]
-            )
-            df_loc["y"][df_loc["fov"] == fov_offset["fov"][i]] = (
-                df_loc["y"][df_loc["fov"] == fov_offset["fov"][i]] + fov_offset["y_offset"][i]
-            )
-
-    df_loc["spatial"] = [[int(df_loc["x"][i]), int(df_loc["y"][i])] for i in range(df_loc.shape[0])]
-    return df_loc
+            offsets["y_offset"] = offsets["y_offset"].cumsum()
+        frame = frame.merge(offsets[list(required_offsets)], on="fov", how="left")
+        frame["x"] += frame.pop("x_offset").fillna(0)
+        frame["y"] += frame.pop("y_offset").fillna(0)
+    frame["spatial"] = list(frame[["x", "y"]].astype(int).itertuples(index=False, name=None))
+    return frame
 
 
 def read_seqfish(
     path: str,
-    meta_path: str,
-    fov_offset: pd.DataFrame = None,
+    meta_path: Optional[str] = None,
+    fov_offset: Optional[pd.DataFrame] = None,
     accumulate_x: bool = False,
     accumulate_y: bool = False,
+    **kwargs,
 ) -> AnnData:
-    """Read seqFISH data as AnnData.
-
-    Args:
-        path: Path to seqFISH digital expression matrix CSV.
-        meta_path: Path to CSV file containing cell centroid locations.
-        fov_offset: a dataframe contain offset of each fov, for example,
-            {'fov':[fov_1, ..], 'x_offset':[x_offset_1, ..], 'y_offset':[y_offset_1, ..]}
-        accumulate_x: whether to accumulate x_offset
-        accumulate_y: whether to accumulate y_offset
-    """
-    df = pd.read_csv(path, dtype=np.uint16)
-
-    X = csr_matrix(df)
-    obs = pd.DataFrame(index=df.index.to_list())
-    var = pd.DataFrame(index=df.columns.to_list())
-
-    df_loc = read_seqfish_meta_as_dataframe(meta_path, fov_offset, accumulate_x, accumulate_y)
-
-    lm.main_info("Constructing count matrix.")
-    adata = AnnData(X=X, obs=obs, var=var)
-    adata.obs["fov"] = df_loc["fov"].to_list()
-    adata.obs["cell_id"] = df_loc["cell_id"].to_list()
-    adata.obs["region"] = df_loc["region"].to_list()
-
-    adata.obsm = pd.DataFrame(index=df_loc.index.to_list())
-    adata.obsm["spatial"] = np.array(df_loc["spatial"].to_list())
-
-    scale, scale_unit = 1.0, None
-
-    # Set uns
+    """Read modern directory outputs or dispatch the historical two-file API."""
+    if meta_path is None:
+        return _read_seqfish(path, **kwargs)
+    counts = pd.read_csv(path)
+    metadata = read_seqfish_meta_as_dataframe(meta_path, fov_offset, accumulate_x, accumulate_y)
+    if len(metadata) != len(counts):
+        raise ValueError("seqFISH counts and metadata must contain the same number of cells.")
+    adata = AnnData(
+        X=csr_matrix(counts.to_numpy(dtype=np.uint16)),
+        obs=metadata.drop(columns=["spatial"]).copy(),
+        var=pd.DataFrame(index=counts.columns.astype(str)),
+    )
+    adata.obsm[SKM.OBSM_SPATIAL_KEY] = np.asarray(metadata["spatial"].tolist(), dtype=float)
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
     SKM.init_uns_spatial_namespace(adata)
-    SKM.set_uns_spatial_attribute(adata, SKM.UNS_SPATIAL_SCALE_KEY, scale)
-    SKM.set_uns_spatial_attribute(adata, SKM.UNS_SPATIAL_SCALE_UNIT_KEY, scale_unit)
+    SKM.set_uns_spatial_attribute(adata, SKM.UNS_SPATIAL_SCALE_KEY, 1.0)
+    SKM.set_uns_spatial_attribute(adata, SKM.UNS_SPATIAL_SCALE_UNIT_KEY, None)
     return adata
+
+
+__all__ = ["read_seqfish", "read_seqfish_meta_as_dataframe"]

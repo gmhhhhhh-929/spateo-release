@@ -5,36 +5,40 @@ This module provides functions for reading spatial transcriptomics data,
 particularly from SpaceRanger output (both bin-level and cell segmentation data).
 """
 
-import pandas as pd
-import numpy as np
+import ast
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Literal, Optional, Union
-import ast
-import warnings
+
+import numpy as np
+import pandas as pd
 from anndata import AnnData
 from PIL import Image
+
 from ..._registry import register_function
-from ..single import read_10x_h5, read_10x_mtx
 
 # spateo key
 from ...configuration import SKM
+from ..single import read_10x_h5, read_10x_mtx
 
 try:
     from ..._settings import Colors
 except Exception:
+
     class Colors:
-        HEADER = '\033[95m'
-        BLUE = '\033[94m'
-        CYAN = '\033[96m'
-        GREEN = '\033[92m'
-        WARNING = '\033[93m'
-        FAIL = '\033[91m'
-        ENDC = '\033[0m'
-        BOLD = '\033[1m'
-        UNDERLINE = '\033[4m'
+        HEADER = "\033[95m"
+        BLUE = "\033[94m"
+        CYAN = "\033[96m"
+        GREEN = "\033[92m"
+        WARNING = "\033[93m"
+        FAIL = "\033[91m"
+        ENDC = "\033[0m"
+        BOLD = "\033[1m"
+        UNDERLINE = "\033[4m"
+
 
 def _require_geopandas():
     try:
@@ -42,8 +46,7 @@ def _require_geopandas():
         from shapely import wkt
     except ImportError as exc:
         raise ImportError(
-            "`read_visium_hd_seg` requires `geopandas` and `shapely`. "
-            "Install with: pip install geopandas shapely"
+            "`read_visium_hd_seg` requires `geopandas` and `shapely`. " "Install with: pip install geopandas shapely"
         ) from exc
     return gpd, wkt
 
@@ -86,7 +89,7 @@ def _read_spatial_images(
 
 def _read_scalefactors(root: Path, scalefactors_path: str) -> dict:
     try:
-        with open(root / scalefactors_path, 'r', encoding='utf-8') as file:
+        with open(root / scalefactors_path, "r", encoding="utf-8") as file:
             return json.load(file)
     except FileNotFoundError as exc:
         warnings.warn(f"Could not load scalefactors: {exc}")
@@ -264,11 +267,11 @@ def read_visium_hd_bin(
     else:
         raise FileNotFoundError(f"Neither {h5_path} nor {mtx_path} found")
 
-    #Set spateo keys
+    # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
     SKM.init_uns_pp_namespace(adata)
-    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']",level='step')
-    
+    _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
+
     tissue_path = root / tissue_positions_path
     if not tissue_path.exists() and tissue_positions_path.endswith(".parquet"):
         csv_fallback = root / tissue_positions_path.replace(".parquet", ".csv")
@@ -283,12 +286,12 @@ def read_visium_hd_bin(
     except Exception as exc:
         raise ValueError(f"Could not read tissue positions file {tissue_path}: {exc}")
 
-    if 'barcode' in tissue_df.columns:
-        tissue_df = tissue_df.set_index('barcode')
-    elif tissue_df.index.name != 'barcode' and len(tissue_df.columns) > 0:
+    if "barcode" in tissue_df.columns:
+        tissue_df = tissue_df.set_index("barcode")
+    elif tissue_df.index.name != "barcode" and len(tissue_df.columns) > 0:
         tissue_df = tissue_df.set_index(tissue_df.columns[0])
 
-    adata.obs = pd.merge(adata.obs, tissue_df, left_index=True, right_index=True, how='left')
+    adata.obs = pd.merge(adata.obs, tissue_df, left_index=True, right_index=True, how="left")
 
     coord_cols = None
     for col_pair in (
@@ -318,7 +321,13 @@ def read_visium_hd_bin(
 
 
 @register_function(
-    aliases=["read_visium_hd_seg", "visium hd segmentation", "读取visium hd 分割", "10x spatial cellseg", "space ranger segmentation"],
+    aliases=[
+        "read_visium_hd_seg",
+        "visium hd segmentation",
+        "读取visium hd 分割",
+        "10x spatial cellseg",
+        "space ranger segmentation",
+    ],
     category="io",
     description="Read Visium HD cell-segmentation outputs and attach polygon geometry with centroid coordinates.",
     prerequisites={},
@@ -391,8 +400,7 @@ def read_visium_hd_seg(
                 break
         if fallback is None:
             raise FileNotFoundError(
-                f"Cell segmentations file not found: {seg_path}\n"
-                f"Also tried: {list(alternative_names)}"
+                f"Cell segmentations file not found: {seg_path}\n" f"Also tried: {list(alternative_names)}"
             )
         seg_path = fallback
 
@@ -424,7 +432,6 @@ def read_visium_hd_seg(
     df["x"] = df["geometry"].apply(lambda poly: poly.centroid.x)
     df["y"] = df["geometry"].apply(lambda poly: poly.centroid.y)
     adata.obsm["spatial"] = np.array(df[["x", "y"]])
-
 
     _progress("Loading images and scale factors")
     hires_img, lowres_img = _read_spatial_images(root, hires_image_path, lowres_image_path)
@@ -594,7 +601,7 @@ def write_visium_hd_cellseg(
         Sample key in ``adata.uns["spatial"]``. If None, uses the first key.
     """
     import h5py
-    from scipy.sparse import issparse, csc_matrix
+    from scipy.sparse import csc_matrix, issparse
 
     root = Path(path)
     root.mkdir(parents=True, exist_ok=True)
@@ -618,7 +625,7 @@ def write_visium_hd_cellseg(
     if not issparse(X):
         X = csc_matrix(X)
     # Warn if data looks like normalized floats rather than raw counts
-    if X.dtype.kind == 'f' and X.max() < 100:
+    if X.dtype.kind == "f" and X.max() < 100:
         warnings.warn(
             "adata.X appears to contain normalized values (max < 100, float dtype). "
             "write_visium_hd_cellseg expects raw integer counts; values will be "
@@ -642,11 +649,7 @@ def write_visium_hd_cellseg(
             if "feature_types" in adata.var
             else np.array(["Gene Expression"] * adata.n_vars)
         )
-        genome = (
-            adata.var["genome"].values
-            if "genome" in adata.var
-            else np.array(["GRCh38"] * adata.n_vars)
-        )
+        genome = adata.var["genome"].values if "genome" in adata.var else np.array(["GRCh38"] * adata.n_vars)
         fg.create_dataset("id", data=np.array(gene_ids, dtype="S"))
         fg.create_dataset("name", data=np.array(gene_names, dtype="S"))
         fg.create_dataset("feature_type", data=np.array(feature_types, dtype="S"))
@@ -701,8 +704,7 @@ def write_visium_hd_cellseg(
     images = spatial_uns.get("images", {})
     scalefactors = dict(spatial_uns.get("scalefactors", {}))
 
-    for img_name, filename in [("hires", "tissue_hires_image.png"),
-                                ("lowres", "tissue_lowres_image.png")]:
+    for img_name, filename in [("hires", "tissue_hires_image.png"), ("lowres", "tissue_lowres_image.png")]:
         if img_name in images and images[img_name] is not None:
             img_path = spatial_dir / filename
             img_arr = images[img_name]

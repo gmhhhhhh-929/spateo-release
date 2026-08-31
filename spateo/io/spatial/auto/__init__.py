@@ -14,9 +14,21 @@ import importlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from ...._registry import register_function
+from .._provenance import record_spatial_io, spatial_file_manifest
 
 PathLike = Union[str, Path]
 
@@ -156,6 +168,13 @@ def _detect_xenium(path: Path) -> List[SpatialReadMatch]:
     cells = _first_file(root, ("cells.parquet", "cells.csv.gz", "cells.csv"))
     if mat is None or cells is None:
         return []
+    # The public Atera preview intentionally uses a Xenium-compatible core.
+    # Defer to the dedicated Atera detector when the bundle has explicit Atera
+    # metadata or its named multi-stain morphology layout.
+    from .._atera import _atera_evidence
+
+    if _atera_evidence(root):
+        return []
     evidence = [_rel(mat, root), _rel(cells, root)]
     if (root / "experiment.xenium").exists():
         evidence.append("experiment.xenium")
@@ -166,6 +185,32 @@ def _detect_xenium(path: Path) -> List[SpatialReadMatch]:
             root,
             {},
             0.98,
+            evidence,
+        )
+    ]
+
+
+def _detect_atera(path: Path) -> List[SpatialReadMatch]:
+    root = _as_dir(path)
+    if not (root / "cell_feature_matrix.h5").is_file() and (root / "outs").is_dir():
+        root = root / "outs"
+    matrix = _first_file(root, ("cell_feature_matrix.h5",))
+    cells = _first_file(root, ("cells.parquet", "cells.csv.gz", "cells.csv"))
+    if matrix is None or cells is None:
+        return []
+    from .._atera import _atera_evidence
+
+    atera_evidence = _atera_evidence(root)
+    if not atera_evidence:
+        return []
+    evidence = [_rel(matrix, root), _rel(cells, root), *atera_evidence]
+    return [
+        _make_match(
+            "atera",
+            "spateo.io.spatial._atera.read_atera",
+            root,
+            {},
+            0.995,
             evidence,
         )
     ]
@@ -605,6 +650,7 @@ def _detect_bgi(path: Path) -> List[SpatialReadMatch]:
 
 
 _DETECTORS: Sequence[Callable[[Path], List[SpatialReadMatch]]] = (
+    _detect_atera,
     _detect_xenium,
     _detect_visium_hd_cellseg,
     _detect_visium_hd_bin,
@@ -625,6 +671,10 @@ _TECH_ALIASES = {
     "visiumhdcellseg": {"visium_hd_cellseg"},
     "cellseg": {"visium_hd_cellseg"},
     "xenium": {"xenium"},
+    "atera": {"atera"},
+    "aterainsitu": {"atera"},
+    "aterawta": {"atera"},
+    "wta": {"atera"},
     "slideseq": {"slideseq"},
     "slideseqv2": {"slideseq"},
     "cosmx": {"nanostring"},
@@ -653,6 +703,7 @@ def _canonical_technologies(technology: Optional[str]) -> Optional[set]:
         "visium_hd_bin",
         "visium_hd_cellseg",
         "xenium",
+        "atera",
         "slideseq",
         "nanostring",
         "seqfish",
@@ -686,7 +737,7 @@ def detect_spatial_technologies(
     path
         Dataset directory, or a BGI/Stereo-seq read-level file.
     technology
-        Optional technology filter or alias, for example ``"xenium"``,
+        Optional technology filter or alias, for example ``"atera"``, ``"xenium"``,
         ``"visium_hd"``, ``"cosmx"``, or ``"merscope"``.
     min_confidence
         Drop matches below this score.
@@ -752,12 +803,14 @@ def detect_spatial_technology(
     produces={},
     auto_fix="none",
     examples=[
+        "adata = read_auto_spatial('Atera_outs')",
         "adata = read_auto_spatial('Xenium_outs')",
         "adata = read_auto_spatial('outs/binned_outputs/square_016um')",
         "adata = read_auto_spatial('merscope_dir', load_images=False)",
         "match = detect_spatial_technology('dataset_dir')",
     ],
     related=[
+        "io.spatial.read_atera",
         "io.spatial.read_visium",
         "io.spatial.read_visium_hd",
         "io.spatial.read_xenium",
@@ -785,6 +838,19 @@ def read_auto_spatial(
         strict=strict,
     )
     adata = match.read(**reader_kwargs)
+    combined_kwargs = dict(match.kwargs)
+    combined_kwargs.update(reader_kwargs)
+    record_spatial_io(
+        adata,
+        technology=match.technology,
+        source=match.path,
+        reader=match.reader,
+        confidence=match.confidence,
+        evidence=match.evidence,
+        reader_kwargs=combined_kwargs,
+        manifest=spatial_file_manifest(match.path),
+        format_status="preview-xenium-v4" if match.technology == "atera" else "stable",
+    )
     if return_match:
         return adata, match
     return adata

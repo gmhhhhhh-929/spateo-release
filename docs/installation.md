@@ -1,59 +1,64 @@
 # Installation
 
-## Prerequisites
+## Supported Python versions
 
-Make sure you have at least Python 3.7 installed. Spateo does not officially support earlier Python versions.
+This branch supports CPython 3.10, 3.11, and 3.12. Python 3.10 is the reference environment because it also has the broadest binary-wheel support for Spateo's optional 3D and segmentation dependencies.
 
-## Installation
+Do not independently upgrade NumPy to 2 or AnnData to 0.11+: the current Dynamo 1.5 dependency and legacy Spateo numerical modules require the compatibility window declared in `requirements.txt`.
 
-Spateo can be installed either by downloading a release uploaded to the Python Package Index (PyPI), or the most up-to-date version directly from our GitHub repository.
+## Recommended conda installation
 
-### PyPI
+Clone the repository and create a fresh environment from the tested definition:
 
-The following command will download and install the most recent release of Spateo.
-
-```
-pip install spateo-release
-```
-
-### MPI
-
-The cell-cell interaction modeling framework is dependent on the ```mpi4py``` package and a working MPI implementation. This is not automatically installed on install of the package.
-```conda``` can be used to install both. Within the same environment where ```spateo``` is installed (or where ```spateo``` will be installed), 
-
-```
-conda install mpi4py
+```bash
+git clone https://github.com/gmhhhhhh-929/spateo-release.git
+cd spateo-release
+conda env create --file environment.yml
+conda activate spateo
 ```
 
-This will simultaneously install an MPI implementation based on your computer system (OpenMPI for MacOS or Linux systems, MPICH/MS-MPI for Windows). To check whether the MPI implementation
-is successfully installed and on your path, run the ```mpiexec``` command. 
+The environment uses conda-forge for compiled scientific, HDF5, Arrow, and geospatial packages, then installs this checkout in editable mode.
 
-### GitHub
+Verify the result before analysis:
 
-To have access to the most up-to-date version (which may include features not yet in the PyPI version), Spateo can be installed directly from the `main` branch of our GitHub repository.
-
-```
-pip install git+https://github.com/aristoteleo/spateo-release
+```bash
+python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test
+python -m pip check
 ```
 
-To install Spateo from a specific GitHub branch,
+## Existing environment
 
+For an existing CPython 3.10-3.12 environment:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+python -m pip install -r dev-requirements.txt  # only for development/testing
+python -m pytest -q tests/io tests/preprocessing
 ```
-pip install git+https://github.com/aristoteleo/spateo-release@{branch}
+
+Prefer creating a new environment over repeatedly replacing NumPy, HDF5, Shapely, or VTK wheels in an old environment. Mixed conda/pip binary stacks are a common cause of import and GEOS errors.
+
+## MPI
+
+The cell-cell interaction modeling framework additionally requires MPI:
+
+```bash
+conda install -c conda-forge mpi4py
+mpiexec --version
 ```
 
-where `{branch}` is the branch name.
+## Codex environment skill
 
-## Known Issues and Fixes
-
-There sometimes may be issues reading datasets from AnnData objects. To remedy this, manually install the following 
-package versions into the environment that Spateo is contained in (if these versions are not already installed):
-
-```
-pip install h5py==3.7.0
-pip install anndata==0.8.0
-```
+The repository includes `$setup-spateo-environment` under `skills/setup-spateo-environment`. It guides a coding agent through non-destructive environment creation, compatibility checks, focused tests, and troubleshooting.
 
 ## Development
 
-If you are interested in contributing to Spateo, please read [](contributing).
+Install development tools and run the suite:
+
+```bash
+python -m pip install -r dev-requirements.txt
+python -m pytest -q
+```
+
+See [](contributing) for contribution guidelines.

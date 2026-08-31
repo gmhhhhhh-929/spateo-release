@@ -1,6 +1,7 @@
 """
 Miscellaneous non-normalizing data transformations on AnnData objects
 """
+
 from functools import singledispatch
 from typing import Optional, Union
 
@@ -10,7 +11,9 @@ import scipy
 from anndata import AnnData
 from sklearn.utils import check_array, sparsefuncs
 
+from ..configuration import SKM
 from ..logging import logger_manager as lm
+from .utils import _record_step
 
 
 # ------------------------------------------ Log Transformation ------------------------------------------ #
@@ -353,3 +356,82 @@ def sparse_mean_var_major_axis(data, indices, indptr, major_len, minor_len, dtyp
         variances[i] /= minor_len
 
     return means, variances
+
+
+def log1p_layer(
+    adata: AnnData,
+    layer: str = SKM.NORM_LAYER_KEY,
+    out_layer: str = SKM.LOG1P_LAYER_KEY,
+    set_X: bool = True,
+    inplace: bool = True,
+) -> Optional[AnnData]:
+    """Log-transform one expression layer while preserving the input layer."""
+    target = adata if inplace else adata.copy()
+    matrix = SKM.select_layer_data(target, layer=layer, copy=True)
+    values = matrix.data if scipy.sparse.issparse(matrix) else np.asarray(matrix)
+    if values.size and (not np.isfinite(values).all() or np.nanmin(values) < 0):
+        raise ValueError(f"`adata.layers[{layer!r}]` must contain finite, non-negative values for log1p.")
+    if scipy.sparse.issparse(matrix):
+        matrix = matrix.tocsr(copy=True).astype(np.float32)
+        matrix.data = np.log1p(matrix.data)
+    else:
+        matrix = np.log1p(np.asarray(matrix, dtype=np.float32))
+    target.layers[out_layer] = matrix
+    if set_X:
+        target.X = matrix.copy()
+    SKM.init_uns_pp_namespace(target)
+    params = {"layer": layer, "out_layer": out_layer, "set_X": set_X}
+    target.uns[SKM.UNS_PP_KEY]["log1p"] = params
+    _record_step(target, "log1p_layer", params)
+    return None if inplace else target
+
+
+def scale_layer(
+    adata: AnnData,
+    layer: str = SKM.LOG1P_LAYER_KEY,
+    out_layer: str = SKM.SCALE_LAYER_KEY,
+    zero_center: bool = False,
+    max_value: Optional[float] = 10,
+    inplace: bool = True,
+) -> Optional[AnnData]:
+    """Scale features in a layer, keeping sparse matrices sparse by default.
+
+    ``zero_center=True`` necessarily densifies sparse input and should only be
+    used for data sizes that fit comfortably in memory.
+    """
+    target = adata if inplace else adata.copy()
+    matrix = SKM.select_layer_data(target, layer=layer, copy=True)
+    if scipy.sparse.issparse(matrix):
+        matrix = matrix.tocsr(copy=True).astype(np.float32)
+        means, variances = sparsefuncs.mean_variance_axis(matrix, axis=0)
+        std = np.sqrt(np.maximum(variances, 0))
+        std[std == 0] = 1
+        if zero_center:
+            matrix = matrix.toarray()
+            matrix = (matrix - means) / std
+        else:
+            sparsefuncs.inplace_column_scale(matrix, 1 / std)
+    else:
+        matrix = np.asarray(matrix, dtype=np.float32)
+        means = matrix.mean(axis=0)
+        std = matrix.std(axis=0)
+        std[std == 0] = 1
+        matrix = (matrix - means) / std if zero_center else matrix / std
+    if max_value is not None:
+        if max_value <= 0:
+            raise ValueError("`max_value` must be positive or None.")
+        if scipy.sparse.issparse(matrix):
+            matrix.data = np.clip(matrix.data, -max_value, max_value)
+        else:
+            matrix = np.clip(matrix, -max_value, max_value)
+    target.layers[out_layer] = matrix
+    SKM.init_uns_pp_namespace(target)
+    params = {
+        "layer": layer,
+        "out_layer": out_layer,
+        "zero_center": zero_center,
+        "max_value": max_value,
+    }
+    target.uns[SKM.UNS_PP_KEY]["scale"] = params
+    _record_step(target, "scale_layer", params)
+    return None if inplace else target
