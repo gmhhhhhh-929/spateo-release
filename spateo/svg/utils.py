@@ -1,6 +1,5 @@
 from typing import List, Optional, Union
 
-import dynamo as dyn
 import numpy as np
 import ot
 import pandas as pd
@@ -13,6 +12,7 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
+from .._native import neighbors
 from ..logging import logger_manager as lm
 
 
@@ -168,7 +168,7 @@ def cal_geodesic_distance(
 
     """
 
-    dyn.tl.neighbors(
+    neighbors(
         adata,
         X_data=adata.obsm[layer],
         n_neighbors=n_neighbors,
@@ -190,7 +190,7 @@ def cal_geodesic_distance(
     b = b[np.max(b.obsp["spatial_distances"].toarray(), axis=1) <= max_dis_cutoff]
     lm.main_info(f"The cell/buckets number after filtering by max_dis_cutoff is {len(b)}")
 
-    dyn.tl.neighbors(
+    neighbors(
         b,
         X_data=b.obsm[layer],
         n_neighbors=n_neighbors,
@@ -213,7 +213,7 @@ def cal_euclidean_distance(
     min_dis_cutoff: float = np.inf,
     max_dis_cutoff: float = np.inf,
 ) -> AnnData:
-    dyn.tl.neighbors(
+    neighbors(
         adata,
         X_data=adata.obsm[layer],
         n_neighbors=adata.n_obs,

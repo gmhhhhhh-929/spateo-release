@@ -11,6 +11,7 @@ from scipy.sparse import issparse
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 
+from ..._native import cluster_graph, neighbors
 from ...logging import logger_manager as lm
 
 
@@ -407,10 +408,8 @@ class simple_GC_DEC(nn.Module):
             else:
                 adata = ad.AnnData(X)
 
-            import dynamo as dyn
-
-            dyn.tl.neighbors(adata, n_neighbors=n_neighbors, X_data=adata.X)
-            dyn.tl.louvain(adata, resolution=res)
+            neighbors(adata, n_neighbors=n_neighbors, X_data=adata.X)
+            cluster_graph(adata, resolution=res, key_added="louvain", method="louvain")
             y_pred = adata.obs["louvain"].astype(int).to_numpy()
             self.n_clusters = len(np.unique(y_pred))
         # ----------------------------------------------------------------

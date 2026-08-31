@@ -11,9 +11,9 @@ python -c "import platform; print(platform.machine())"
 conda list | grep -E 'numpy|scipy|h5py|pyarrow|shapely|geopandas'
 ```
 
-## AnnData and Dynamo resolver conflict
+## AnnData resolver conflict
 
-`dynamo-release` 1.5.x requires `anndata<0.11`. If pip selects AnnData 0.11 or newer, reinstall using the repository requirements rather than forcing Dynamo with `--no-deps`.
+Spateo supports `anndata>=0.9,<0.12`. If pip selects a newer major storage API, reinstall using the repository requirements instead of forcing an untested AnnData release with `--no-deps`.
 
 ## Shapely and PyGEOS warning
 

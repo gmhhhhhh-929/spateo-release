@@ -172,10 +172,9 @@ def get_all_dependencies_version(display=True):
     try:
         package = distribution(package_name)
     except PackageNotFoundError:
-        package_name = "dynamo-release"
-        package = distribution(package_name)
+        package = None
     names = {package_name}
-    for requirement in package.requires or ():
+    for requirement in (package.requires or ()) if package is not None else ():
         parsed = Requirement(requirement)
         if parsed.marker is None or parsed.marker.evaluate():
             names.add(parsed.name)

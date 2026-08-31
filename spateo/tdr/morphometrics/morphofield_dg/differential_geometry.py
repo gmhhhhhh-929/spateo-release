@@ -3,6 +3,8 @@ from typing import Optional
 import numpy as np
 from anndata import AnnData
 
+from ...._native import SparseVectorField
+
 try:
     from typing import Literal
 except ImportError:
@@ -22,9 +24,7 @@ def _generate_vf_class(
             vector_field_class = GPVectorField()
             vector_field_class.from_adata(adata, vf_key=vf_key, nonrigid_only=nonrigid_only)
         elif method == "sparsevfc":
-            from dynamo.vectorfield.scVectorField import SvcVectorField
-
-            vector_field_class = SvcVectorField()
+            vector_field_class = SparseVectorField()
             vector_field_class.from_adata(adata, basis=None, vf_key=vf_key)
         else:
             raise Exception(

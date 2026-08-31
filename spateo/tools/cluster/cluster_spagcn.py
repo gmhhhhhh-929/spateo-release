@@ -49,7 +49,7 @@ def spagcn_vanilla(
                           If `n_pca_components` == None, the value at the inflection point of the PCA curve is
                           automatically calculated as n_comps.
         e_neigh: Number of nearest neighbor in gene expression space.
-            Used in dyn.pp.neighbors(adata, n_neighbors=e_neigh).
+            Used in ``st.tl.neighbors(adata, n_neighbors=e_neigh)``.
         resolution: Resolution in the Louvain clustering method. Used when `n_clusters`==None.
         n_clusters: Number of spatial domains wanted.
                     If `n_clusters` != None, the suitable resolution in the initial Louvain clustering method

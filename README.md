@@ -45,6 +45,7 @@ Spateo, whole embryo 3D spatial transcriptomics, 3D reconstruction, Stereo-seq, 
 * <p align="justify"> Spateo brings in the concept of the “morphometric vector field” that predicts migration paths for each cell within an organ in a 3D fashion and reveals principles of cell migration by exploring various differential geometry quantities. </p
 
 ## News
+* Aug/31/2026: Spateo no longer depends on Dynamo; graph construction, spatial sampling, normalization, sparse morphometric vector fields, differential geometry, and trajectory integration now use a native runtime.
 * Aug/31/2026: Spatial IO and preprocessing are now unified under `spateo.io` and `spateo.pp`, with automatic Atera/Xenium/Visium detection and a reproducible Python 3.10-3.12 environment.
 * Nov/11/2024: We are also honored to have this work highlighted by Nature: https://nature.com/articles/d41586-024-03615-8.  
 * Nov/11/2024: We are thrilled to share the publication of Spateo in Cell today: https://cell.com/cell/fulltext/S0092-8674(24)01159-0. 

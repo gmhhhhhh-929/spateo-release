@@ -13,6 +13,8 @@ from pyvista import PolyData, UnstructuredGrid
 from scipy.sparse import issparse
 from scipy.spatial.distance import cdist
 
+from ...._native import fetch_X_data, log1p, normalize_total
+
 
 def construct_backbone(
     model: Union[PolyData, UnstructuredGrid],
@@ -188,9 +190,6 @@ def backbone_scc(
     Returns:
         An ``AnnData`` object is updated/copied with the ``key_added`` in the ``.obs`` attribute, storing the clustering results.
     """
-    import dynamo as dyn
-    from dynamo.tools.utils import fetch_X_data
-
     from ....tools import scc
 
     adata = adata if inplace else adata.copy()
@@ -214,8 +213,8 @@ def backbone_scc(
         uns={"__type": "UMI", "pp": {}},
     )
 
-    dyn.pp.normalize(backbone_adata)
-    dyn.pp.log1p(backbone_adata)
+    normalize_total(backbone_adata, target_sum=10_000)
+    log1p(backbone_adata)
     backbone_adata.obsm["X_backbone"] = backbone_adata.X
     scc(
         backbone_adata,

@@ -4,7 +4,7 @@
 
 This branch supports CPython 3.10, 3.11, and 3.12. Python 3.10 is the reference environment because it also has the broadest binary-wheel support for Spateo's optional 3D and segmentation dependencies.
 
-Do not independently upgrade NumPy to 2 or AnnData to 0.11+: the current Dynamo 1.5 dependency and legacy Spateo numerical modules require the compatibility window declared in `requirements.txt`.
+Do not independently upgrade NumPy to 2 or AnnData to 0.12+: legacy numerical modules and AnnData storage conventions still require the compatibility window declared in `requirements.txt`. Spateo no longer requires Dynamo; its maintained graph, sampling, normalization, and morphogenesis primitives are installed with Spateo itself.
 
 ## Recommended conda installation
 

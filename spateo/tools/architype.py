@@ -185,7 +185,7 @@ def archetypes_genes(
 
     Examples:
          >>> st.tl.archetypes_genes(adata)
-         >>> dyn.pl.scatters(subset_adata,
+         >>> st.pl.scatters(subset_adata,
          >>>     basis="spatial",
          >>>     color=['archetype %d'% i] + typical_genes.to_list(),
          >>>     pointsize=0.03,

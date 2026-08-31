@@ -9,6 +9,7 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
+from ...._native import sample
 from ....logging import logger_manager as lm
 from ..utilities import add_model_labels, merge_models
 from .arrow_model import construct_arrows
@@ -54,9 +55,9 @@ def construct_field(
     return construct_arrows(
         start_points=np.asarray(model.points),
         direction=np.asarray(model[vf_key]),
-        arrows_scale=np.ones(shape=(model.n_points,))
-        if arrows_scale_key is None
-        else np.asarray(model[arrows_scale_key]),
+        arrows_scale=(
+            np.ones(shape=(model.n_points,)) if arrows_scale_key is None else np.asarray(model[arrows_scale_key])
+        ),
         n_sampling=n_sampling,
         sampling_method=sampling_method,
         factor=factor,
@@ -179,8 +180,6 @@ def construct_field_plain(
         lines_model: 3D vector field model with arrows and lines.
         plot_cmap: Recommended colormap parameter values for plotting.
     """
-
-    from dynamo.tools.sampling import sample
 
     start_points = np.asarray(model.points)
     direction = np.asarray(model[vf_key]) * factor

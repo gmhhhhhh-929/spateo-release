@@ -12,8 +12,8 @@ def copy_adata(adata: AnnData) -> AnnData:
 
     Examples
     --------
-    >>> import dynamo as dyn
-    >>> adata = dyn.sample_data.hgForebrainGlutamatergic()
+    >>> import spateo as st
+    >>> adata = st.sample_data.merfish()
     >>> original_adata = copy_adata(adata)
     >>> # now after this statement, adata "points" to a new object, copy of the original
     >>> adata = copy_adata(adata)

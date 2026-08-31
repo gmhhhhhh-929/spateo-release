@@ -10,9 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-# import tensorflow as tf
-from dynamo.tools.sampling import sample
-
+from ...._native import sample
 from .backbone_utils import sort_nodes_of_curve
 
 #####################################################################

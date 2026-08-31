@@ -1,9 +1,9 @@
-# Tested support window: CPython 3.10-3.12. Dynamo 1.5.x currently requires
-# anndata <0.11; NumPy <2 keeps the legacy Spateo numerical modules stable.
+# Tested support window: CPython 3.10-3.12. NumPy <2 keeps the legacy Spateo
+# numerical modules stable while the remaining NumPy 2 audit is completed.
 numpy>=1.23.5,<2
 pandas>=1.5.3,<2.3
 scipy>=1.10,<1.14
-anndata>=0.9,<0.11
+anndata>=0.9,<0.12
 h5py>=3.8,<4
 setuptools>=68
 typing_extensions>=4.8
@@ -19,7 +19,6 @@ opencv-python>=4.8,<5
 # Core analysis and visualization stack.
 adjustText>=1.0
 colorcet>=3
-dynamo-release>=1.5.3,<2
 folium>=0.14
 kneed>=0.8
 loompy>=3.0.7

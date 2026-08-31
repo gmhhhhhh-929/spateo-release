@@ -9,6 +9,7 @@ try:
 except ImportError:
     from typing_extensions import Literal
 
+from ...._native import sample
 from ....logging import logger_manager as lm
 from ..utilities import add_model_labels
 
@@ -134,8 +135,6 @@ def construct_arrows(
         model: Arrows model.
         plot_cmap: Recommended colormap parameter values for plotting.
     """
-
-    from dynamo.tools.sampling import sample
 
     index_arr = np.arange(0, start_points.shape[0])
     # if not (n_sampling is None):

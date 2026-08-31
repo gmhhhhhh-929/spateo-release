@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 
+from spateo._native import sparse_vector_field
 from spateo.alignment.methods import paste_pairwise_align
 from spateo.alignment.utils import get_optimal_mapping_relationship
 from spateo.logging import logger_manager as lm
@@ -164,8 +165,6 @@ def _morphofield_sparsevfc(
             grid_V: Prediction of developmental direction of the grid.
     """
 
-    from dynamo.vectorfield.scVectorField import SparseVFC
-
     if not (NX is None):
         predict_X = NX
     else:
@@ -186,7 +185,7 @@ def _morphofield_sparsevfc(
 
         restart_counter, cur_vf_list, res_list = 0, [], []
         while True:
-            cur_vf_dict = SparseVFC(
+            cur_vf_dict = sparse_vector_field(
                 X=X,
                 Y=V,
                 Grid=predict_X,
@@ -231,7 +230,15 @@ def _morphofield_sparsevfc(
 
                 break
     else:
-        vf_dict = SparseVFC(X=X, Y=V, Grid=predict_X, M=M, lstsq_method=lstsq_method, lambda_=lambda_, **kwargs)
+        vf_dict = sparse_vector_field(
+            X=X,
+            Y=V,
+            Grid=predict_X,
+            M=M,
+            lstsq_method=lstsq_method,
+            lambda_=lambda_,
+            **kwargs,
+        )
 
     vf_dict["method"] = "sparsevfc"
     lm.main_finish_progress(progress_name="morphofield")

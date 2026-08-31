@@ -1,6 +1,6 @@
 ---
 name: setup-spateo-environment
-description: Create, update, diagnose, and verify a reproducible Spateo environment for CPython 3.10-3.12. Use when installing this repository, resolving NumPy/AnnData/Dynamo/geospatial binary conflicts, checking an existing conda environment, or preparing a new user to run Spateo IO and spatial preprocessing.
+description: Create, update, diagnose, and verify a reproducible Spateo environment for CPython 3.10-3.12. Use when installing this repository, resolving NumPy/AnnData/geospatial binary conflicts, checking an existing conda environment, or preparing a new user to run Spateo IO, spatial preprocessing, and native morphogenesis tools.
 ---
 
 # Setup Spateo Environment
@@ -40,7 +40,8 @@ Create a separate environment by default. Preserve the user's current environmen
 ## Compatibility contract
 
 - Keep `numpy>=1.23.5,<2` because legacy Spateo numerical modules are not yet audited for NumPy 2.
-- Keep `anndata>=0.9,<0.11` while `dynamo-release>=1.5.3,<2` declares `anndata<0.11`.
+- Keep `anndata>=0.9,<0.12`; the maintained Spateo APIs are tested across the 0.9-0.11 storage conventions.
+- Do not install Dynamo for Spateo. Neighbor graphs, sampling, normalization, and sparse vector fields are implemented inside this repository.
 - Use Shapely 2 with a modern GeoPandas build; do not mix a PyGEOS-backed GeoPandas installation with Shapely 1.
 - Install `pyarrow`, `tifffile`, and `Pillow` for Parquet and microscopy-image spatial readers.
 - Never silence `pip check` failures. Resolve them or state the exact remaining conflict.

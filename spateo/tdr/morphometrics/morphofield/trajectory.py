@@ -2,6 +2,8 @@ from typing import Optional, Union
 
 from anndata import AnnData
 
+from ...._native import predict_fate
+
 try:
     from typing import Literal
 except ImportError:
@@ -58,11 +60,8 @@ def morphopath(
                         embeddings. Of note, if the average is set to be True, the average cell state at each time point
                         is calculated for all cells.
     """
-    from dynamo.prediction.fate import fate
-
     adata = adata if inplace else adata.copy()
-    fate_adata = adata.copy()
-    if vf_key not in fate_adata.uns_keys():
+    if vf_key not in adata.uns_keys():
         raise Exception(
             f"The {vf_key} that corresponds to the reconstructed vector field is not in ``anndata.uns``."
             f"Please run ``st.tdr.morphofield_gp`` or ``st.tdr.morphofield_sparsevfc`` before fate prediction."
@@ -72,42 +71,30 @@ def morphopath(
             f"The method for vector field  reconstruction is not in avaliable."
             f"Please re-run ``st.tdr.morphofield_gp`` or ``st.tdr.morphofield_sparsevfc`` before fate prediction."
         )
-    if f"VecFld_{key_added}" not in fate_adata.uns_keys():
-        fate_adata.uns[f"VecFld_{key_added}"] = fate_adata.uns[vf_key]
-    if f"X_{key_added}" not in fate_adata.obsm_keys():
-        fate_adata.obsm[f"X_{key_added}"] = fate_adata.uns[f"VecFld_{key_added}"]["X"]
-
     method = adata.uns[vf_key]["method"]
     if method == "gaussian_process":
         from .gaussian_process import _gp_velocity
 
-        fate(
-            fate_adata,
-            init_cells=fate_adata.obs_names.tolist(),
-            basis=key_added,
-            layer=layer,
+        fate_result = predict_fate(
+            vf_dict=adata.uns[vf_key],
+            init_states=adata.uns[vf_key]["X"],
             interpolation_num=interpolation_num,
             t_end=t_end,
             direction=direction,
             average=average,
-            cores=cores,
-            VecFld_true=lambda X: _gp_velocity(X=X, vf_dict=fate_adata.uns[vf_key], nonrigid_only=nonrigid_only),
-            **kwargs,
+            velocity_function=lambda X: _gp_velocity(X=X, vf_dict=adata.uns[vf_key], nonrigid_only=nonrigid_only),
         )
     elif method == "sparsevfc":
-        fate(
-            fate_adata,
-            init_cells=fate_adata.obs_names.tolist(),
-            basis=key_added,
-            layer=layer,
+        fate_result = predict_fate(
+            vf_dict=adata.uns[vf_key],
+            init_states=adata.uns[vf_key]["X"],
             interpolation_num=interpolation_num,
             t_end=t_end,
             direction=direction,
             average=average,
-            cores=cores,
-            **kwargs,
         )
-    adata.uns[key_added] = fate_adata.uns[f"fate_{key_added}"].copy()
+    fate_result["init_cells"] = adata.obs_names.tolist()
+    adata.uns[key_added] = fate_result
 
     cells_states = adata.uns[key_added]["prediction"]
     cells_times = adata.uns[key_added]["t"]

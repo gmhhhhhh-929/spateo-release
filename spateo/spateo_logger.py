@@ -121,7 +121,7 @@ class Logger:
         return wrapper
 
     @contextmanager
-    def namespaced_context(self, namespace: str): # -> None
+    def namespaced_context(self, namespace: str):  # -> None
         """Context manager to set the logging namespace.
 
         Args:
@@ -292,15 +292,15 @@ class Logger:
 
 
 class LoggerManager:
-    """A manager for Dynamo-specific loggers."""
+    """A manager for Spateo loggers."""
 
     DEBUG = logging.DEBUG
     INFO = logging.INFO
     CRITICAL = logging.CRITICAL
     EXCEPTION = logging.ERROR
 
-    main_logger = Logger("dynamo")
-    temp_timer_logger = Logger("dynamo-temp-timer-logger")
+    main_logger = Logger("spateo")
+    temp_timer_logger = Logger("spateo-temp-timer-logger")
 
     @staticmethod
     def get_main_logger() -> Logger:
@@ -440,4 +440,4 @@ def main_info_verbose_timeit(msg: str) -> None:
 
 def main_set_level(level: int) -> None:
     """Set the logging level of the main logger."""
-    set_logger_level("dynamo", level)
+    set_logger_level("spateo", level)

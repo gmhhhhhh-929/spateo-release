@@ -11,6 +11,7 @@ from scipy import stats
 from scipy.sparse import issparse
 from statsmodels.sandbox.stats.multicomp import multipletests
 
+from .._native import fetch_X_data
 from ..logging import logger_manager as lm
 
 
@@ -63,8 +64,6 @@ def glm_degs(
     adata = adata if inplace else adata.copy()
 
     if X_data is None:
-        from dynamo.tools.utils import fetch_X_data
-
         genes, X_data = fetch_X_data(adata, genes, layer)
     else:
         assert (
@@ -75,7 +74,7 @@ def glm_degs(
         ), "When providing X_data, the number of genes must be equal the columns of X_data."
     lm.main_warning(
         "Gene expression matrix must be normalized by the size factor, please check if the input gene expression matrix is correct."
-        "If you don't have the size factor normalized gene expression matrix, please run `dynamo.pp.normalize_cell_expr_by_size_factors(skip_log = True)`."
+        "If the data are raw counts, first run `spateo.pp.normalize_total` or `spateo.pp.preprocess_spatial`."
     )
 
     md = patsy.ModelDesc.from_formula(fullModelFormulaStr)

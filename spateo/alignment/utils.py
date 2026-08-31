@@ -6,6 +6,7 @@ import pandas as pd
 from anndata import AnnData
 from scipy.spatial import cKDTree
 
+from spateo._native import sample
 from spateo.logging import logger_manager as lm
 
 ####################
@@ -28,8 +29,6 @@ def downsampling(
     sampling_method: str = "trn",
     spatial_key: str = "spatial",
 ) -> Union[List[AnnData], AnnData]:
-    from dynamo.tools.sampling import sample
-
     models = models if isinstance(models, list) else [models]
     sampling_models = []
     for m in models:

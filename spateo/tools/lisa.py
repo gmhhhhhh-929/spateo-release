@@ -1,5 +1,5 @@
-"""Spatial markers.
-"""
+"""Spatial markers."""
+
 import warnings
 from random import sample
 from typing import Tuple
@@ -130,7 +130,7 @@ def local_moran_i(
     >>> for i in adata.obs[group].unique():
     >>>     if i in markers_df.index.get_level_values(0):
     >>>         print(markers_df[i])
-    >>>         dyn.pl.space(adata, color=group, highlights=[i], pointsize=0.1, alpha=1, figsize=(12, 8))
+    >>>         st.pl.space(adata, color=group, highlights=[i], pointsize=0.1, alpha=1, figsize=(12, 8))
     >>>         st.pl.space(adata, color=markers_df[i].index, pointsize=0.1, alpha=1, figsize=(12, 8))
     """
     from pysal import explore

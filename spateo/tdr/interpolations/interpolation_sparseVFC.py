@@ -3,10 +3,10 @@ from typing import Optional, Union
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from dynamo.vectorfield.scVectorField import SparseVFC
 from numpy import ndarray
 from scipy.sparse import issparse
 
+from ..._native import sparse_vector_field
 from ...logging import logger_manager as lm
 
 
@@ -60,7 +60,15 @@ def kernel_interpolation(
     info_data = info_data[:, 1:]
 
     # Interpolation
-    res = SparseVFC(source_spatial_data, info_data, target_points, lambda_=lambda_, lstsq_method=lstsq_method, **kwargs)
+    res = sparse_vector_field(
+        source_spatial_data,
+        info_data,
+        Grid=target_points,
+        lambda_=lambda_,
+        lstsq_method=lstsq_method,
+        **kwargs,
+    )
+    target_points = res["grid"]
     target_info_data = res["grid_V"]
 
     lm.main_info("Creating an adata object with the interpolated expression...")

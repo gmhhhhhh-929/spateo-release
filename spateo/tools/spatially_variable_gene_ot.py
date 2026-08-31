@@ -5,12 +5,12 @@ POT Python Optimal Transport library,
 Journal of Machine Learning Research, 22(78):1−8, 2021.
 Website: https://pythonot.github.io/
 """
+
 import multiprocessing
 import sys
 from functools import partial
 from typing import List, Optional, Union
 
-import dynamo as dyn
 import numpy as np
 import ot
 import pandas as pd
@@ -18,6 +18,8 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix, issparse
 from tqdm import tqdm
 from typing_extensions import Literal
+
+from .._native import neighbors
 
 
 def _cal_dis(adata, x1):
@@ -73,7 +75,7 @@ def bin_adata(adata, bin_size=1):
 
 
 def _cal_geodesic_distance(adata, n_neighbors=30, min_dis_cutoff=2.0, max_dis_cutoff=4.0):
-    dyn.tl.neighbors(
+    neighbors(
         adata,
         X_data=adata.obsm["spatial"],
         n_neighbors=n_neighbors,
@@ -91,7 +93,7 @@ def _cal_geodesic_distance(adata, n_neighbors=30, min_dis_cutoff=2.0, max_dis_cu
     ]
     b = b[np.max(b.obsp["spatial_distances"].toarray(), axis=1) <= max_dis_cutoff]
 
-    dyn.tl.neighbors(
+    neighbors(
         b,
         X_data=b.obsm["spatial"],
         n_neighbors=n_neighbors,

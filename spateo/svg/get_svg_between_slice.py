@@ -3,7 +3,6 @@ import sys
 from functools import partial
 from typing import List, Optional, Union
 
-import dynamo as dyn
 import numpy as np
 import ot
 import pandas as pd

@@ -625,20 +625,20 @@ def _matplotlib_points(
         _vmin = (
             np.nanmin(values)
             if vmin is None
-            else np.nanpercentile(values, vmin * 100)
-            if (vmin + vmax == 1 and 0 <= vmin < vmax)
-            else np.nanpercentile(values, vmin)
-            if (vmin + vmax == 100 and 0 <= vmin < vmax)
-            else vmin
+            else (
+                np.nanpercentile(values, vmin * 100)
+                if (vmin + vmax == 1 and 0 <= vmin < vmax)
+                else np.nanpercentile(values, vmin) if (vmin + vmax == 100 and 0 <= vmin < vmax) else vmin
+            )
         )
         _vmax = (
             np.nanmax(values)
             if vmax is None
-            else np.nanpercentile(values, vmax * 100)
-            if (vmin + vmax == 1 and 0 <= vmin < vmax)
-            else np.nanpercentile(values, vmax)
-            if (vmin + vmax == 100 and 0 <= vmin < vmax)
-            else vmax
+            else (
+                np.nanpercentile(values, vmax * 100)
+                if (vmin + vmax == 1 and 0 <= vmin < vmax)
+                else np.nanpercentile(values, vmax) if (vmin + vmax == 100 and 0 <= vmin < vmax) else vmax
+            )
         )
 
         if sym_c and _vmin < 0 and _vmax > 0:
@@ -1158,7 +1158,7 @@ def default_quiver_args(arrow_size, arrow_len=None):
 
 # ---------------------------------------------------------------------------------------------------
 def _plot_traj(y0, t, args, integration_direction, ax, color, lw, f):
-    from dynamo.tools.utils import integrate_vf
+    from ..._native import integrate_vf
 
     _, y = integrate_vf(y0, t, args, integration_direction, f)  # integrate_vf_ivp
 

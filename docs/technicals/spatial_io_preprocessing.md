@@ -57,3 +57,7 @@ processed = st.pp.preprocess_spatial(
     inplace=False,
 )
 ```
+
+## Native numerical runtime
+
+Spateo does not require Dynamo. Internal utilities now provide AnnData matrix selection, sparse-safe normalization, nearest-neighbor graphs, resolution-aware graph clustering, spatially balanced sampling, robust sparse Gaussian-kernel vector fields, analytical Jacobians, and trajectory integration. Existing public Spateo functions and stored keys such as `VecFld_morpho`, `X_ctrl`, `grid_V`, and `fate_morpho` remain available. The compatibility contracts were informed by the public [Dynamo preprocessing and vector-field APIs](https://github.com/aristoteleo/dynamo-release/tree/master/dynamo), but the maintained numerical implementation is local to Spateo.

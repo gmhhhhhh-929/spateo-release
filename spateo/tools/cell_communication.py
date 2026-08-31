@@ -114,12 +114,12 @@ def niches(
     if spatial_neighbors not in adata.uns.keys():
         raise ValueError(
             f"No spatial_key {spatial_neighbors} exists in adata,"
-            f"using 'dyn.tl.neighbors' to calulate the spatial neighbors first."
+            f"using 'st.tl.neighbors' to calculate the spatial neighbors first."
         )
     if spatial_distances not in adata.obsp.keys():
         raise ValueError(
             f"No spatial_key {spatial_distances} exists in adata,"
-            f"using 'dyn.tl.neighbors' to calulate the spatial diatances first."
+            f"using 'st.tl.neighbors' to calculate the spatial distances first."
         )
 
     nw = {"neighbors": adata.uns["spatial_neighbors"]["indices"], "weights": adata.obsp["spatial_distances"]}

@@ -1,5 +1,34 @@
 .PHONY : install install-dev install-all test check build docs clean push_release
 
+CHECK_PATHS = \
+	spateo/_native \
+	spateo/io \
+	spateo/preprocessing \
+	spateo/alignment/utils.py \
+	spateo/plotting/static/position.py \
+	spateo/svg/get_svg.py \
+	spateo/svg/get_svg_between_slice.py \
+	spateo/svg/utils.py \
+	spateo/tdr/interpolations/interpolation_sparseVFC.py \
+	spateo/tdr/models/models_backbone/backbone.py \
+	spateo/tdr/models/models_backbone/backbone_methods.py \
+	spateo/tdr/models/models_migration/arrow_model.py \
+	spateo/tdr/models/models_migration/morphofield_model.py \
+	spateo/tdr/models/models_migration/morphopath_model.py \
+	spateo/tdr/morphometrics/morphofield/sparsevfc.py \
+	spateo/tdr/morphometrics/morphofield/trajectory.py \
+	spateo/tdr/morphometrics/morphofield_dg/differential_geometry.py \
+	spateo/tools/cluster/cluster_spagcn.py \
+	spateo/tools/cluster/spagcn_utils.py \
+	spateo/tools/cluster/utils.py \
+	spateo/tools/glm.py \
+	spateo/tools/spatially_variable_gene_ot.py \
+	tests/io \
+	tests/preprocessing \
+	tests/test_native_runtime.py \
+	skills/setup-spateo-environment/scripts/verify_environment.py \
+	spateo/get_version.py
+
 install:
 	pip install .
 	# There is a problem with just pip installing hdbscan...
@@ -22,10 +51,8 @@ test:
 
 check:
 	python -m compileall -q spateo
-	isort --profile black --check spateo/io spateo/preprocessing tests/io tests/preprocessing \
-		skills/setup-spateo-environment/scripts/verify_environment.py spateo/get_version.py
-	black --check spateo/io spateo/preprocessing tests/io tests/preprocessing \
-		skills/setup-spateo-environment/scripts/verify_environment.py spateo/get_version.py
+	isort --profile black --check $(CHECK_PATHS)
+	black --check $(CHECK_PATHS)
 	@echo OK
 
 build:

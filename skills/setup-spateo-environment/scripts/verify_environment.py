@@ -10,9 +10,10 @@ import platform
 import sys
 import tempfile
 from importlib import import_module
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, requires, version
 from pathlib import Path
 
+from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 
@@ -38,18 +39,14 @@ REQUIRED = {
     "numpy": ">=1.23.5,<2",
     "pandas": ">=1.5.3,<2.3",
     "scipy": ">=1.10,<1.14",
-    "anndata": ">=0.9,<0.11",
+    "anndata": ">=0.9,<0.12",
     "h5py": ">=3.8,<4",
-    "dynamo-release": ">=1.5.3,<2",
     "geopandas": ">=0.14,<1.2",
     "shapely": ">=2,<3",
     "pyarrow": ">=12,<26",
 }
 
-IMPORT_NAMES = {
-    "dynamo-release": "dynamo",
-    "shapely": "shapely",
-}
+IMPORT_NAMES = {"shapely": "shapely"}
 
 
 def _run_smoke_test() -> dict[str, object]:
@@ -58,6 +55,7 @@ def _run_smoke_test() -> dict[str, object]:
     from scipy import sparse
 
     import spateo as st
+    from spateo._native import sparse_vector_field
 
     counts = sparse.csr_matrix(np.array([[1, 0, 2], [0, 3, 1], [2, 1, 1], [1, 2, 0]]))
     adata = AnnData(counts)
@@ -72,7 +70,15 @@ def _run_smoke_test() -> dict[str, object]:
     )
     if result is None or "counts" not in result.layers or "X_pca" not in result.obsm:
         raise RuntimeError("Spateo preprocessing smoke test did not produce the expected layers and PCA.")
-    return {"shape": list(result.shape), "pca_shape": list(result.obsm["X_pca"].shape)}
+    velocity = np.tile(np.asarray([0.5, -0.25]), (adata.n_obs, 1))
+    vector_field = sparse_vector_field(adata.obsm["spatial"], velocity, Grid=adata.obsm["spatial"], M=4)
+    if not np.isfinite(vector_field["grid_V"]).all():
+        raise RuntimeError("Spateo native vector-field smoke test returned non-finite values.")
+    return {
+        "shape": list(result.shape),
+        "pca_shape": list(result.obsm["X_pca"].shape),
+        "vector_field_shape": list(vector_field["grid_V"].shape),
+    }
 
 
 def main() -> int:
@@ -105,6 +111,14 @@ def main() -> int:
         packages[package] = {"version": installed, "required": specifier, "compatible": compatible}
         if not compatible:
             errors.append(f"{package}: found {installed}, expected {specifier}")
+
+    try:
+        declared = [Requirement(item).name.lower() for item in (requires("spateo-release") or [])]
+    except PackageNotFoundError:
+        declared = []
+    report["dynamo_required"] = any(name in {"dynamo", "dynamo-release"} for name in declared)
+    if report["dynamo_required"]:
+        errors.append("Installed Spateo metadata still declares Dynamo; reinstall this checkout.")
 
     try:
         import spateo as st

@@ -1,5 +1,6 @@
 from anndata import AnnData
-from dynamo.plot.scatters import scatters
+
+from .scatters import scatters
 
 
 def position(adata: AnnData, skey: str = "position", **kwargs):

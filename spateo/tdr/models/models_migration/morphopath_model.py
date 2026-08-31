@@ -5,6 +5,7 @@ import pyvista as pv
 from anndata import AnnData
 from pyvista import MultiBlock, PolyData
 
+from ...._native import SparseVectorField, sample
 from ....logging import logger_manager as lm
 from ..utilities import add_model_labels, collect_models, merge_models
 from .arrow_model import construct_arrows
@@ -114,7 +115,6 @@ def construct_genesis(
         plot_cmap: Recommended colormap parameter values for plotting.
     """
 
-    from dynamo.vectorfield import SvcVectorField
     from scipy.integrate import odeint
 
     if fate_key not in adata.uns_keys():
@@ -125,7 +125,7 @@ def construct_genesis(
 
     t_ind = np.asarray(list(adata.uns[fate_key]["t"].keys()), dtype=int)
     t_sort_ind = np.argsort(t_ind)
-    t = np.asarray(list(adata.uns["fate_morpho"]["t"].values()))[t_sort_ind]
+    t = np.asarray(list(adata.uns[fate_key]["t"].values()))[t_sort_ind]
     flats = np.unique([int(item) for sublist in t for item in sublist])
     flats = np.hstack((0, flats))
     flats = np.sort(flats) if t_end is None else np.sort(flats[flats <= t_end])
@@ -135,17 +135,20 @@ def construct_genesis(
         else flats[(np.linspace(0, len(flats) - 1, n_steps)).astype(int)]
     )
 
-    vf = SvcVectorField()
+    vf = SparseVectorField()
     vf.from_adata(adata, basis=fate_key[5:])
     f = lambda x, _: vf.func(x)
     displace = lambda x, dt: odeint(f, x, [0, dt])
 
     init_states = adata.uns[fate_key]["init_states"]
-    pts = [i.tolist() for i in init_states]
-    stages_X = []
-    for i in range(n_steps):
-        pts = [displace(cur_pts, time_vec[i])[1].tolist() for cur_pts in pts]
-        stages_X.append(np.asarray(pts))
+    pts = np.asarray(init_states, dtype=float)
+    stages_X = [pts.copy()]
+    previous_time = float(time_vec[0])
+    for current_time in time_vec[1:]:
+        delta_time = float(current_time) - previous_time
+        pts = np.asarray([displace(cur_pts, delta_time)[1] for cur_pts in pts])
+        stages_X.append(pts.copy())
+        previous_time = float(current_time)
 
     cells_developmental_model, plot_cmap = construct_genesis_X(
         stages_X=stages_X, n_spacing=None, key_added=key_added, label=label, color=color, alpha=alpha
@@ -190,8 +193,6 @@ def construct_trajectory_X(
         trajectory_model: 3D cell developmental trajectory model.
         plot_cmap: Recommended colormap parameter values for plotting.
     """
-
-    from dynamo.tools.sampling import sample
 
     init_states = np.asarray([cell_states[0] for cell_states in cells_states]) if init_states is None else init_states
     index_arr = np.arange(0, len(init_states))

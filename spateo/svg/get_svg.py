@@ -3,18 +3,18 @@ import sys
 from functools import partial
 from typing import List, Optional, Tuple, Union
 
-import dynamo as dyn
 import numpy as np
 import ot
 import pandas as pd
 import scipy
 import scipy.stats
 from anndata import AnnData
-from dynamo.tools.sampling import sample
 from scipy.sparse import csr_matrix, issparse
 from scipy.stats import norm
 from statsmodels.stats.multitest import multipletests
 from tqdm import tqdm
+
+from .._native import sample
 
 try:
     from typing import Literal
