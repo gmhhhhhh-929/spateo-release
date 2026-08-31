@@ -2,6 +2,7 @@
 Todo:
     * @Xiaojieqiu: update with Google style documentation, function typings, tests
 """
+
 import math
 from typing import List, Optional, Tuple, Union
 
@@ -13,7 +14,7 @@ import shapely.geometry as geometry
 from sklearn.decomposition import PCA
 
 from ..configuration import SKM
-from ..io.bbs import alpha_shape
+from ..io.spatial import alpha_shape
 from ..logging import logger_manager as lm
 
 

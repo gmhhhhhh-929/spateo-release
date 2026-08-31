@@ -1,26 +1,28 @@
 """Unified input/output API for Spateo.
 
 The ``general``, ``single`` and ``spatial`` packages are the primary
-implementations. Historical flat modules remain importable for compatibility,
-but top-level functions resolve to the maintained readers below.
+implementations. The former flat technology modules have been removed; the
+top-level functions below are direct exports of the maintained subpackages.
 """
 
 from . import general, single, spatial
-from .bbs import alpha_shape, get_concave_hull
 from .general import load, read_csv, save
-from .image import read_image
 from .single import read, read_10x_h5, read_10x_mtx, read_h5ad
 from .spatial import (
     SpatialReadMatch,
+    alpha_shape,
     detect_spatial_technologies,
     detect_spatial_technology,
+    get_concave_hull,
     read_atera,
     read_auto_spatial,
     read_bgi,
     read_bgi_agg,
+    read_image,
     read_merfish,
     read_nanostring,
     read_seqfish,
+    read_seqscope,
     read_slideseq,
     read_spatial_auto,
     read_starmap_plus,
@@ -32,7 +34,6 @@ from .spatial import (
     spatial_file_manifest,
     write_visium_hd_cellseg,
 )
-from .tenx import read_10x, read_10x_as_anndata
 
 __all__ = [
     "general",
@@ -61,13 +62,12 @@ __all__ = [
     "read_merfish",
     "read_nanostring",
     "read_seqfish",
+    "read_seqscope",
     "read_slideseq",
     "read_starmap_plus",
     "read_bgi",
     "read_bgi_agg",
     "read_image",
-    "read_10x",
-    "read_10x_as_anndata",
     "alpha_shape",
     "get_concave_hull",
 ]

@@ -1,13 +1,13 @@
 from unittest import TestCase
 
-import spateo.io.bgi as bgi
+import spateo.io.spatial as spatial_io
 
 from ..mixins import TestMixin
 
 
 class TestIOBGI(TestMixin, TestCase):
     def test_read_bgi_as_dataframe(self):
-        df = bgi.read_bgi_as_dataframe(self.bgi_counts_path)
+        df = spatial_io.read_bgi_as_dataframe(self.bgi_counts_path)
         self.assertEqual(
             {"geneID": "0610009B22Rik", "x": 9776, "y": 12669, "total": 1},
             df.iloc[0].to_dict(),
@@ -15,7 +15,7 @@ class TestIOBGI(TestMixin, TestCase):
         self.assertEqual(77634, df.shape[0])
 
     def test_read_bgi_agg(self):
-        adata = bgi.read_bgi_agg(self.bgi_counts_path)
+        adata = spatial_io.read_bgi_agg(self.bgi_counts_path)
         self.assertNotIn("spliced", adata.layers)
         self.assertNotIn("unspliced", adata.layers)
         self.assertIn("spatial", adata.uns)

@@ -1,5 +1,5 @@
-"""Functions to segment regions of a slice by UMI density.
-"""
+"""Functions to segment regions of a slice by UMI density."""
+
 from collections import Counter
 from typing import Dict, Optional, Tuple, Union
 
@@ -12,7 +12,7 @@ from sklearn import cluster
 from typing_extensions import Literal
 
 from ..configuration import SKM
-from ..io.utils import bin_matrix
+from ..io.spatial import bin_matrix
 from ..logging import logger_manager as lm
 from . import utils
 from .label import _replace_labels

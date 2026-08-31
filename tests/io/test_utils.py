@@ -3,7 +3,7 @@ from unittest import TestCase, mock
 import numpy as np
 from scipy import sparse
 
-import spateo.io.utils as utils
+import spateo.io.spatial as spatial_io
 
 from ..mixins import TestMixin
 
@@ -16,5 +16,5 @@ class TestIOUtils(TestMixin, TestCase):
         expected[0, 1] = X[:2, 2].sum()
         expected[1, 0] = X[2, :2].sum()
         expected[1, 1] = X[2, 2]
-        np.testing.assert_array_equal(expected, utils.bin_matrix(X, 2))
-        np.testing.assert_array_equal(expected, utils.bin_matrix(sparse.csr_matrix(X), 2).A)
+        np.testing.assert_array_equal(expected, spatial_io.bin_matrix(X, 2))
+        np.testing.assert_array_equal(expected, spatial_io.bin_matrix(sparse.csr_matrix(X), 2).A)
