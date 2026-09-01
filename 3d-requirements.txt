@@ -7,5 +7,5 @@ panel
 PVGeo>=2.1.0
 pyacvd>=0.2.9
 PyMCubes>=0.1.6,<0.2
-pymeshfix>=0.15.0
+pymeshfix>=0.18.1,<0.19
 pythreejs

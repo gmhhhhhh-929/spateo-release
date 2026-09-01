@@ -45,6 +45,7 @@ REQUIRED = {
     "shapely": ">=2,<3",
     "pyarrow": ">=12,<26",
     "PyMCubes": ">=0.1.6,<0.2",
+    "pymeshfix": ">=0.18.1,<0.19",
 }
 
 IMPORT_NAMES = {"shapely": "shapely", "PyMCubes": "mcubes"}
@@ -90,6 +91,7 @@ def _run_3d_smoke_test() -> dict[str, object]:
     import pyvista as pv
 
     from spateo.tdr.models.models_individual.mesh_methods import marching_cube_mesh
+    from spateo.tdr.models.models_individual.mesh_utils import fix_mesh
 
     grid = np.indices((16, 16, 16), dtype=float)
     volume = (np.square(grid - 7.5).sum(axis=0) <= 25.0).astype(float)
@@ -102,12 +104,44 @@ def _run_3d_smoke_test() -> dict[str, object]:
     if mesh.n_points == 0 or mesh.n_cells == 0 or not np.isfinite(mesh.points).all():
         raise RuntimeError("Spateo marching_cube_mesh returned an invalid mesh.")
 
+    open_mesh = (
+        pv.Sphere(theta_resolution=30, phi_resolution=30)
+        .clip(normal=(0.0, 0.0, 1.0), origin=(0.0, 0.0, 0.0), invert=False)
+        .extract_surface()
+        .triangulate()
+        .clean()
+    )
+
+    def boundary_count(model: pv.PolyData) -> int:
+        return int(
+            model.extract_feature_edges(
+                boundary_edges=True,
+                feature_edges=False,
+                manifold_edges=False,
+                non_manifold_edges=False,
+            ).n_cells
+        )
+
+    boundary_edges_before = boundary_count(open_mesh)
+    fixed_mesh = fix_mesh(open_mesh)
+    boundary_edges_after = boundary_count(fixed_mesh)
+    if boundary_edges_before == 0 or boundary_edges_after != 0:
+        raise RuntimeError(
+            "Spateo fix_mesh did not close the 3D smoke-test surface "
+            f"({boundary_edges_before} -> {boundary_edges_after} boundary edges)."
+        )
+
     return {
         "pymcubes": version("PyMCubes"),
+        "pymeshfix": version("pymeshfix"),
         "direct_vertices": int(vertices.shape[0]),
         "direct_triangles": int(triangles.shape[0]),
         "spateo_mesh_points": int(mesh.n_points),
         "spateo_mesh_cells": int(mesh.n_cells),
+        "boundary_edges_before_repair": boundary_edges_before,
+        "boundary_edges_after_repair": boundary_edges_after,
+        "repaired_mesh_points": int(fixed_mesh.n_points),
+        "repaired_mesh_cells": int(fixed_mesh.n_cells),
     }
 
 

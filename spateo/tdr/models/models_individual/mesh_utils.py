@@ -131,11 +131,15 @@ def fix_mesh(mesh: PolyData) -> PolyData:
         import pymeshfix as mf
     except ImportError:
         raise ImportError(
-            "You need to install the package `pymeshfix`. \nInstall pymeshfix via `pip install pymeshfix`"
+            "You need to install the package `pymeshfix`. "
+            '\nInstall it via `pip install "pymeshfix>=0.18.1,<0.19"`.'
         )
 
     meshfix = mf.MeshFix(mesh)
-    meshfix.repair(verbose=False)
+    # pymeshfix 0.18 removed the deprecated ``verbose`` keyword. Its default
+    # repair mode is already non-verbose, and calling without the keyword is
+    # compatible with both the old and current APIs.
+    meshfix.repair()
     fixed_mesh = meshfix.mesh.triangulate().clean()
 
     if fixed_mesh.n_points == 0:

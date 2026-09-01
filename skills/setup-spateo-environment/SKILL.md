@@ -35,6 +35,12 @@ Create a separate environment by default. Preserve the user's current environmen
    ```
 
    The distribution is named `PyMCubes`, but Spateo imports it as `mcubes`.
+
+   If mesh repair raises an import error, install the tested MeshFix API range:
+
+   ```bash
+   python -m pip install "pymeshfix>=0.18.1,<0.19"
+   ```
 6. Run the verifier:
 
    ```bash
@@ -61,6 +67,7 @@ Create a separate environment by default. Preserve the user's current environmen
 - Use Shapely 2 with a modern GeoPandas build; do not mix a PyGEOS-backed GeoPandas installation with Shapely 1.
 - Install `pyarrow`, `tifffile`, and `Pillow` for Parquet and microscopy-image spatial readers.
 - Install `PyMCubes>=0.1.6,<0.2` for `spateo.tdr` marching-cubes mesh reconstruction; verify the import name `mcubes`, not `pymcubes`.
+- Install `pymeshfix>=0.18.1,<0.19` for `spateo.tdr` mesh repair. Spateo calls `MeshFix.repair()` without the removed `verbose` keyword so the current API remains compatible.
 - Never silence `pip check` failures. Resolve them or state the exact remaining conflict.
 
 Read [references/troubleshooting.md](references/troubleshooting.md) only when verification or installation fails.
