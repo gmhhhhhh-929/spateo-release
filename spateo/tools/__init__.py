@@ -1,3 +1,4 @@
+from .._native import sample
 from .architype import (
     archetypes,
     archetypes_genes,

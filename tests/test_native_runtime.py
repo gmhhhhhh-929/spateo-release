@@ -72,6 +72,14 @@ def test_spatial_sampling_is_deterministic_unique_and_balanced():
     assert np.ptp(coordinates[selected_a, 0]) >= 90
 
 
+def test_sampling_is_available_from_public_tools_api():
+    from spateo.tools import sample as public_sample
+
+    values = np.arange(10)
+    selected = public_sample(values, n=4, method="random", seed=42)
+    np.testing.assert_array_equal(selected, sample(values, n=4, method="random", seed=42))
+
+
 def test_native_sparse_vector_field_and_fate_contract():
     rng = np.random.default_rng(4)
     coordinates = rng.normal(size=(50, 2))

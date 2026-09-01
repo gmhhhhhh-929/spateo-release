@@ -111,12 +111,16 @@ def paste_pairwise_align(
         G_init = nx.from_numpy(G_init, type_as=type_as)
         G0 = (1 / nx.sum(G_init)) * G_init
 
+    # ``cg`` is a public solver in ``ot.optim`` in current POT releases.  It
+    # used to be re-exported from ``ot.gromov``, but that compatibility alias
+    # was removed in POT 0.9.6.  Resolve the solver without mutating POT's
+    # module namespace so callers do not need a notebook-level monkeypatch.
     try:
         from ot.optim import cg
-    except ImportError:
+    except ImportError:  # pragma: no cover - compatibility with old POT
         from ot.gromov import cg
 
-    pi, log = ot.gromov.cg(
+    pi, log = cg(
         a,
         b,
         (1 - alpha) * M,
