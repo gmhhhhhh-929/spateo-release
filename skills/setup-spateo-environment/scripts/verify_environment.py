@@ -46,6 +46,7 @@ REQUIRED = {
     "pyarrow": ">=12,<26",
     "PyMCubes": ">=0.1.6,<0.2",
     "pymeshfix": ">=0.18.1,<0.19",
+    "pyacvd": ">=0.4,<0.5",
 }
 
 IMPORT_NAMES = {"shapely": "shapely", "PyMCubes": "mcubes"}
@@ -91,7 +92,8 @@ def _run_3d_smoke_test() -> dict[str, object]:
     import pyvista as pv
 
     from spateo.tdr.models.models_individual.mesh_methods import marching_cube_mesh
-    from spateo.tdr.models.models_individual.mesh_utils import fix_mesh
+    from spateo.tdr.models.models_individual.mesh import construct_surface
+    from spateo.tdr.models.models_individual.mesh_utils import fix_mesh, uniform_mesh
 
     grid = np.indices((16, 16, 16), dtype=float)
     volume = (np.square(grid - 7.5).sum(axis=0) <= 25.0).astype(float)
@@ -131,9 +133,28 @@ def _run_3d_smoke_test() -> dict[str, object]:
             f"({boundary_edges_before} -> {boundary_edges_after} boundary edges)."
         )
 
+    uniform = uniform_mesh(fixed_mesh.copy(), nsub=1, nclus=100)
+    if uniform.n_points == 0 or uniform.n_cells == 0:
+        raise RuntimeError("Spateo uniform_mesh returned an empty remeshed surface.")
+
+    surface, inside, _ = construct_surface(
+        pc=pv.PolyData(points),
+        key_added="smoke_test",
+        label="surface",
+        cs_method="marching_cube",
+        cs_args={"mc_scale_factor": 1.5, "dist_sample_num": 50},
+        nsub=1,
+        nclus=50,
+        smooth=5,
+        scale_factor=1.12,
+    )
+    if surface.n_points == 0 or surface.n_cells == 0 or inside.n_points == 0:
+        raise RuntimeError("Spateo construct_surface returned an empty surface or point cloud.")
+
     return {
         "pymcubes": version("PyMCubes"),
         "pymeshfix": version("pymeshfix"),
+        "pyacvd": version("pyacvd"),
         "direct_vertices": int(vertices.shape[0]),
         "direct_triangles": int(triangles.shape[0]),
         "spateo_mesh_points": int(mesh.n_points),
@@ -142,6 +163,11 @@ def _run_3d_smoke_test() -> dict[str, object]:
         "boundary_edges_after_repair": boundary_edges_after,
         "repaired_mesh_points": int(fixed_mesh.n_points),
         "repaired_mesh_cells": int(fixed_mesh.n_cells),
+        "uniform_mesh_points": int(uniform.n_points),
+        "uniform_mesh_cells": int(uniform.n_cells),
+        "construct_surface_points": int(surface.n_points),
+        "construct_surface_cells": int(surface.n_cells),
+        "construct_surface_inside_points": int(inside.n_points),
     }
 
 

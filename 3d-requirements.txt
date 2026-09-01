@@ -5,7 +5,7 @@ meshio
 open3d>=0.19,<0.20
 panel
 PVGeo>=2.1.0
-pyacvd>=0.2.9
+pyacvd>=0.4,<0.5
 PyMCubes>=0.1.6,<0.2
 pymeshfix>=0.18.1,<0.19
 pythreejs

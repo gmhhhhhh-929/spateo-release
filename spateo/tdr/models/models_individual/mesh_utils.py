@@ -80,7 +80,10 @@ def uniform_mesh(mesh: PolyData, nsub: Optional[int] = 3, nclus: int = 20000) ->
     try:
         import pyacvd
     except ImportError:
-        raise ImportError("You need to install the package `pyacvd`. \nInstall pyacvd via `pip install pyacvd`")
+        raise ImportError(
+            "You need to install the package `pyacvd`. "
+            '\nInstall it via `pip install "pyacvd>=0.4,<0.5"`.'
+        )
 
     # if mesh is not dense enough for uniform remeshing, increase the number of triangles in a mesh.
     if not (nsub is None):

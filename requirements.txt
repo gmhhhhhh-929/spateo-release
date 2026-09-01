@@ -52,6 +52,7 @@ pysal>=23.7,<27
 pyro-ppl>=1.9,<2
 PyMCubes>=0.1.6,<0.2
 pymeshfix>=0.18.1,<0.19
+pyacvd>=0.4,<0.5
 pyvista>=0.39.1,<0.47
 torch>=2.1
 trame>=3,<4

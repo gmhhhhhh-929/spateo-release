@@ -21,25 +21,20 @@ Create a separate environment by default. Preserve the user's current environmen
 
    If the name already exists, choose a new name or request permission before updating it. Do not use `--prune` unless the user explicitly approves removal of packages.
 5. For a compatible existing environment, install the repository with `python -m pip install -e .`. Use `python -m pip install -r dev-requirements.txt` only when tests or development tools are needed.
-   Core marching-cubes support is installed with Spateo. For the full optional 3D toolkit, including Open3D-based methods, install and verify the 3D dependencies:
+   Core marching-cubes surface construction is installed with Spateo. When repairing an older environment, install the complete built-in path together: PyMCubes extracts the surface, PyMeshFix repairs it, and PyACVD remeshes it.
+
+   ```bash
+   python -m pip install \
+     "PyMCubes>=0.1.6,<0.2" \
+     "pymeshfix>=0.18.1,<0.19" \
+     "pyacvd>=0.4,<0.5"
+   ```
+
+   The distribution is named `PyMCubes`, but Spateo imports it as `mcubes`. For the full optional 3D toolkit, including Open3D-based methods, install and verify the 3D extra:
 
    ```bash
    python -m pip install -e ".[3d]"
    python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test-3d
-   ```
-
-   If the main environment is already installed and only marching-cubes reconstruction is unavailable, the minimal compatible repair is:
-
-   ```bash
-   python -m pip install "PyMCubes>=0.1.6,<0.2"
-   ```
-
-   The distribution is named `PyMCubes`, but Spateo imports it as `mcubes`.
-
-   If mesh repair raises an import error, install the tested MeshFix API range:
-
-   ```bash
-   python -m pip install "pymeshfix>=0.18.1,<0.19"
    ```
 6. Run the verifier:
 
@@ -68,6 +63,7 @@ Create a separate environment by default. Preserve the user's current environmen
 - Install `pyarrow`, `tifffile`, and `Pillow` for Parquet and microscopy-image spatial readers.
 - Install `PyMCubes>=0.1.6,<0.2` for `spateo.tdr` marching-cubes mesh reconstruction; verify the import name `mcubes`, not `pymcubes`.
 - Install `pymeshfix>=0.18.1,<0.19` for `spateo.tdr` mesh repair. Spateo calls `MeshFix.repair()` without the removed `verbose` keyword so the current API remains compatible.
+- Install `pyacvd>=0.4,<0.5` for the uniform remeshing stage that `construct_surface` runs after surface repair.
 - Never silence `pip check` failures. Resolve them or state the exact remaining conflict.
 
 Read [references/troubleshooting.md](references/troubleshooting.md) only when verification or installation fails.

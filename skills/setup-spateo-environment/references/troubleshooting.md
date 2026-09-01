@@ -37,3 +37,20 @@ export MPLCONFIGDIR="$PWD/.cache/matplotlib"
 ## `pip check` reports unrelated notebook conflicts
 
 Treat the check as failed until resolved. For example, an old `nbformat` with a modern `nbconvert` should be repaired by installing the repository requirements, which constrain both packages to a compatible range.
+
+## Jupyter still executes a pre-upgrade function
+
+Python keeps imported function objects in the running kernel even after pip replaces their source files. A traceback that mentions an old argument but displays a different current source line is evidence of this stale-code state.
+
+Before restarting, save the notebook and confirm that its file on disk is non-empty. Then restart the kernel and rerun imports and cells that create analysis objects. Do not terminate a live kernel for an unsaved or zero-byte notebook merely to refresh a package.
+
+Confirm the refreshed implementation inside the new kernel when needed:
+
+```python
+import inspect
+from spateo.tdr.models.models_individual.mesh_utils import fix_mesh
+
+print(inspect.getsource(fix_mesh))
+```
+
+For PyMeshFix 0.18, the displayed implementation must call `meshfix.repair()` without a `verbose` keyword.
