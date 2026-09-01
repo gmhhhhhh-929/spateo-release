@@ -44,9 +44,10 @@ REQUIRED = {
     "geopandas": ">=0.14,<1.2",
     "shapely": ">=2,<3",
     "pyarrow": ">=12,<26",
+    "PyMCubes": ">=0.1.6,<0.2",
 }
 
-IMPORT_NAMES = {"shapely": "shapely"}
+IMPORT_NAMES = {"shapely": "shapely", "PyMCubes": "mcubes"}
 
 
 def _run_smoke_test() -> dict[str, object]:
@@ -81,9 +82,43 @@ def _run_smoke_test() -> dict[str, object]:
     }
 
 
+def _run_3d_smoke_test() -> dict[str, object]:
+    import itertools
+
+    import mcubes
+    import numpy as np
+    import pyvista as pv
+
+    from spateo.tdr.models.models_individual.mesh_methods import marching_cube_mesh
+
+    grid = np.indices((16, 16, 16), dtype=float)
+    volume = (np.square(grid - 7.5).sum(axis=0) <= 25.0).astype(float)
+    vertices, triangles = mcubes.marching_cubes(volume, 0.5)
+    if vertices.shape[0] == 0 or triangles.shape[0] == 0:
+        raise RuntimeError("PyMCubes returned an empty surface for the 3D smoke-test volume.")
+
+    points = np.asarray(list(itertools.product(range(5), repeat=3)), dtype=float)
+    mesh = marching_cube_mesh(pv.PolyData(points), levelset=0.5, dist_sample_num=50)
+    if mesh.n_points == 0 or mesh.n_cells == 0 or not np.isfinite(mesh.points).all():
+        raise RuntimeError("Spateo marching_cube_mesh returned an invalid mesh.")
+
+    return {
+        "pymcubes": version("PyMCubes"),
+        "direct_vertices": int(vertices.shape[0]),
+        "direct_triangles": int(triangles.shape[0]),
+        "spateo_mesh_points": int(mesh.n_points),
+        "spateo_mesh_cells": int(mesh.n_cells),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke-test", action="store_true", help="Run a tiny IO/preprocessing import workflow.")
+    parser.add_argument(
+        "--smoke-test-3d",
+        action="store_true",
+        help="Run a PyMCubes and Spateo marching-cubes mesh reconstruction workflow.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     args = parser.parse_args()
 
@@ -136,6 +171,12 @@ def main() -> int:
             report["smoke_test"] = _run_smoke_test()
         except Exception as exc:
             errors.append(f"smoke test failed: {exc}")
+
+    if args.smoke_test_3d and not errors:
+        try:
+            report["smoke_test_3d"] = _run_3d_smoke_test()
+        except Exception as exc:
+            errors.append(f"3D smoke test failed: {exc}")
 
     report["ok"] = not errors
     if args.json:

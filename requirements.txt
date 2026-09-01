@@ -50,6 +50,7 @@ nbconvert>=7.16,<8
 nbformat>=5.10,<6
 pysal>=23.7,<27
 pyro-ppl>=1.9,<2
+PyMCubes>=0.1.6,<0.2
 pyvista>=0.39.1,<0.47
 torch>=2.1
 trame>=3,<4

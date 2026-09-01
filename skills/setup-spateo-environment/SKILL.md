@@ -21,12 +21,28 @@ Create a separate environment by default. Preserve the user's current environmen
 
    If the name already exists, choose a new name or request permission before updating it. Do not use `--prune` unless the user explicitly approves removal of packages.
 5. For a compatible existing environment, install the repository with `python -m pip install -e .`. Use `python -m pip install -r dev-requirements.txt` only when tests or development tools are needed.
+   Core marching-cubes support is installed with Spateo. For the full optional 3D toolkit, including Open3D-based methods, install and verify the 3D dependencies:
+
+   ```bash
+   python -m pip install -e ".[3d]"
+   python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test-3d
+   ```
+
+   If the main environment is already installed and only marching-cubes reconstruction is unavailable, the minimal compatible repair is:
+
+   ```bash
+   python -m pip install "PyMCubes>=0.1.6,<0.2"
+   ```
+
+   The distribution is named `PyMCubes`, but Spateo imports it as `mcubes`.
 6. Run the verifier:
 
    ```bash
    python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test
    python -m pip check
    ```
+
+   Add `--smoke-test-3d` when the environment must support marching-cubes mesh reconstruction.
 
 7. Run focused tests before the full suite:
 
@@ -44,6 +60,7 @@ Create a separate environment by default. Preserve the user's current environmen
 - Do not install Dynamo for Spateo. Neighbor graphs, sampling, normalization, and sparse vector fields are implemented inside this repository.
 - Use Shapely 2 with a modern GeoPandas build; do not mix a PyGEOS-backed GeoPandas installation with Shapely 1.
 - Install `pyarrow`, `tifffile`, and `Pillow` for Parquet and microscopy-image spatial readers.
+- Install `PyMCubes>=0.1.6,<0.2` for `spateo.tdr` marching-cubes mesh reconstruction; verify the import name `mcubes`, not `pymcubes`.
 - Never silence `pip check` failures. Resolve them or state the exact remaining conflict.
 
 Read [references/troubleshooting.md](references/troubleshooting.md) only when verification or installation fails.
