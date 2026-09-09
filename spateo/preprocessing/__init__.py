@@ -13,6 +13,22 @@ from .qc import (
     filter_spots,
     flag_local_qc_outliers,
 )
+from .slice_quality import (
+    HighConfidencePolicy,
+    SliceQCConfig,
+    SliceSeriesResult,
+    add_multiscale_exclusion_evidence,
+    apply_high_confidence_policy,
+    calculate_slice_quality,
+    evaluate_paired_simulation,
+    evaluate_slice_calls,
+    scan_h5ad_collection,
+    scan_h5ad_series,
+    simulate_slice_quality_artifacts,
+    write_high_confidence_outputs,
+    write_slice_quality_collection_outputs,
+    write_slice_quality_outputs,
+)
 from .transform import log1p, log1p_layer, scale, scale_layer
 from .utils import standardize_spatial_adata
 
@@ -28,6 +44,20 @@ __all__ = [
     "filter_spots",
     "filter_genes_by_spatial_qc",
     "flag_local_qc_outliers",
+    "SliceQCConfig",
+    "SliceSeriesResult",
+    "HighConfidencePolicy",
+    "calculate_slice_quality",
+    "scan_h5ad_series",
+    "scan_h5ad_collection",
+    "add_multiscale_exclusion_evidence",
+    "apply_high_confidence_policy",
+    "simulate_slice_quality_artifacts",
+    "evaluate_slice_calls",
+    "evaluate_paired_simulation",
+    "write_slice_quality_outputs",
+    "write_slice_quality_collection_outputs",
+    "write_high_confidence_outputs",
     "calculate_size_factors",
     "normalize_total",
     "log1p_layer",

@@ -47,6 +47,7 @@ Spateo, whole embryo 3D spatial transcriptomics, 3D reconstruction, Stereo-seq, 
 ## News
 * Aug/31/2026: Spateo no longer depends on Dynamo; graph construction, spatial sampling, normalization, sparse morphometric vector fields, differential geometry, and trajectory integration now use a native runtime.
 * Aug/31/2026: Spatial IO and preprocessing are now unified under `spateo.io` and `spateo.pp`, with automatic Atera/Xenium/Visium detection and a reproducible Python 3.10-3.12 environment.
+* Sep/09/2026: Optional post-I/O serial-slice QC now supports one or many isolated datasets, multiscale evidence, and audited two-stage keep/exclude decisions before alignment.
 * Nov/11/2024: We are also honored to have this work highlighted by Nature: https://nature.com/articles/d41586-024-03615-8.  
 * Nov/11/2024: We are thrilled to share the publication of Spateo in Cell today: https://cell.com/cell/fulltext/S0092-8674(24)01159-0. 
 
