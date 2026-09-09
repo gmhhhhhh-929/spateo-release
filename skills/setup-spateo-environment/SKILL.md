@@ -1,6 +1,6 @@
 ---
 name: setup-spateo-environment
-description: Create, update, diagnose, and verify a reproducible Spateo environment for CPython 3.10-3.12. Use when installing this repository, resolving NumPy/AnnData/geospatial binary conflicts, checking an existing conda environment, or preparing a new user to run Spateo IO, spatial preprocessing, and native morphogenesis tools.
+description: Create, update, diagnose, and verify a reproducible Spateo environment for CPython 3.10-3.12. Use when installing this repository, resolving NumPy/AnnData/geospatial binary conflicts, checking an existing conda environment, or preparing a user to run Spateo IO, optional serial-slice quality control, spatial preprocessing, and native morphogenesis tools.
 ---
 
 # Setup Spateo Environment
@@ -9,7 +9,7 @@ Create a separate environment by default. Preserve the user's current environmen
 
 ## Workflow
 
-1. Locate the Spateo repository and confirm that `environment.yml`, `requirements.txt`, and `setup.py` belong to the same checkout.
+1. Locate the Spateo repository and confirm that `environment.yml`, `requirements.txt`, `setup.py`, and `spateo/preprocessing/slice_quality.py` belong to the same checkout.
 2. Inspect the requested or active interpreter with `python --version` and `python -m pip check`. Support CPython 3.10, 3.11, and 3.12 only.
 3. Prefer conda-forge for NumPy, SciPy, HDF5, Arrow, GeoPandas, Shapely, and image libraries. These compiled packages are the most common source of macOS and Linux ABI conflicts.
 4. For a new environment, run from the repository root:
@@ -36,23 +36,44 @@ Create a separate environment by default. Preserve the user's current environmen
    python -m pip install -e ".[3d]"
    python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test-3d
    ```
-6. Run the verifier:
+6. Keep Python environments and Codex skills separate. Install Spateo into the
+   conda environment; install Codex skills under
+   `${CODEX_HOME:-$HOME/.codex}/skills`. Never `pip install` a Codex skill.
+   The repository's `setup-spateo-environment` skill manages the environment.
+   The companion `spatial-slice-quality-qc` skill owns the HTML viewer and
+   orchestration around the package-level detector. When the user asks Codex
+   to install these skills, use the Codex skill installer and preserve an
+   existing installation unless replacement is explicitly authorized.
+
+7. Run the verifier:
 
    ```bash
    python skills/setup-spateo-environment/scripts/verify_environment.py --smoke-test
    python -m pip check
    ```
 
+   The default smoke test now covers ordinary IO/preprocessing plus the
+   serial-slice QC API, including an in-memory dataset, controlled expression
+   thinning, and two independent file-backed datasets. Use the narrower check
+   when only the newly added QC surface needs verification:
+
+   ```bash
+   python skills/setup-spateo-environment/scripts/verify_environment.py \
+     --smoke-test-slice-qc
+   ```
+
    Add `--smoke-test-3d` when the environment must support marching-cubes mesh reconstruction.
 
-7. Run focused tests before the full suite:
+8. Run focused tests before the full suite:
 
    ```bash
    python -m pytest -q tests/io tests/preprocessing
    python -m pytest -q
    ```
 
-8. Report the Python executable, resolved core versions, verifier result, test counts, and any optional feature that remains unavailable.
+9. Report the Python executable, resolved core versions, verifier result,
+   slice-QC smoke-test result, test counts, installed Codex skill locations,
+   and any optional feature that remains unavailable.
 
 ## Compatibility contract
 
@@ -65,5 +86,9 @@ Create a separate environment by default. Preserve the user's current environmen
 - Install `pymeshfix>=0.18.1,<0.19` for `spateo.tdr` mesh repair. Spateo calls `MeshFix.repair()` without the removed `verbose` keyword so the current API remains compatible.
 - Install `pyacvd>=0.4,<0.5` for the uniform remeshing stage that `construct_surface` runs after surface repair.
 - Never silence `pip check` failures. Resolve them or state the exact remaining conflict.
+- Serial-slice QC adds no dependency beyond the existing `anndata`, `numpy`,
+  `pandas`, `scipy`, and `h5py` compatibility window.
+- Verify the package-facing QC API through `spateo.pp`; do not make the Spateo
+  distribution depend on the skill-side HTML viewer.
 
 Read [references/troubleshooting.md](references/troubleshooting.md) only when verification or installation fails.

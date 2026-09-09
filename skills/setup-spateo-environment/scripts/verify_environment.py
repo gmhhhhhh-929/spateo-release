@@ -84,6 +84,101 @@ def _run_smoke_test() -> dict[str, object]:
     }
 
 
+def _run_slice_quality_smoke_test() -> dict[str, object]:
+    import numpy as np
+    import pandas as pd
+    from anndata import AnnData
+    from scipy import sparse
+
+    import spateo as st
+
+    rng = np.random.default_rng(31)
+    matrices = []
+    coordinates = []
+    labels: list[str] = []
+    for index in range(5):
+        n_obs = 28
+        angle = np.linspace(0, 2 * np.pi, n_obs, endpoint=False)
+        radius = 4.0 + 0.15 * index
+        coordinates.append(
+            np.column_stack(
+                [
+                    radius * np.cos(angle) + 0.1 * index,
+                    0.75 * radius * np.sin(angle),
+                ]
+            )
+        )
+        matrices.append(rng.poisson(4.0, size=(n_obs, 12)).astype(np.float32))
+        labels.extend([f"S{index:02d}"] * n_obs)
+
+    counts = sparse.csr_matrix(np.vstack(matrices))
+    adata = AnnData(
+        X=counts.copy(),
+        obs=pd.DataFrame(
+            {"slice_id": pd.Categorical(labels)},
+            index=[f"spot_{index}" for index in range(counts.shape[0])],
+        ),
+        var=pd.DataFrame(index=[f"gene_{index}" for index in range(counts.shape[1])]),
+    )
+    adata.layers["counts"] = counts
+    adata.obsm["spatial"] = np.vstack(coordinates)
+    original_coordinates = np.asarray(adata.obsm["spatial"]).copy()
+
+    config = st.pp.SliceQCConfig(window=3, profile_genes=12)
+    metrics = st.pp.calculate_slice_quality(
+        adata,
+        slice_key="slice_id",
+        spatial_key="spatial",
+        layer="counts",
+        config=config,
+    )
+    if len(metrics) != 5 or not set(metrics["recommendation"]).issubset({"keep", "review", "exclude"}):
+        raise RuntimeError("Slice-QC in-memory scan returned an invalid result.")
+    if not np.array_equal(adata.obsm["spatial"], original_coordinates):
+        raise RuntimeError("Slice-QC modified source coordinates.")
+
+    simulated = st.pp.simulate_slice_quality_artifacts(
+        adata,
+        [{"slice_id": "S02", "kind": "depth", "rate": 0.2}],
+        slice_key="slice_id",
+        spatial_key="spatial",
+        layer="counts",
+        random_seed=31,
+    )
+    if "slice_qc_simulated_counts" not in simulated.layers:
+        raise RuntimeError("Slice-QC simulation did not create its separate count layer.")
+
+    with tempfile.TemporaryDirectory(prefix="spateo_slice_qc_verify_") as tmp:
+        source = Path(tmp) / "series.h5ad"
+        adata.write_h5ad(source)
+        collection = st.pp.scan_h5ad_collection(
+            {"series_a": source, "series_b": source},
+            config=config,
+            dataset_options={
+                "series_a": {
+                    "slice_key": "slice_id",
+                    "spatial_key": "spatial",
+                    "layer": "counts",
+                },
+                "series_b": {
+                    "slice_key": "slice_id",
+                    "spatial_key": "spatial",
+                    "layer": "counts",
+                },
+            },
+        )
+    if list(collection) != ["series_a", "series_b"] or any(len(result.metrics) != 5 for result in collection.values()):
+        raise RuntimeError("Slice-QC multi-dataset scan crossed or lost dataset boundaries.")
+
+    return {
+        "slices": int(len(metrics)),
+        "recommendations": {str(key): int(value) for key, value in metrics["recommendation"].value_counts().items()},
+        "simulation_layer": "slice_qc_simulated_counts",
+        "independent_datasets": list(collection),
+        "source_coordinates_unchanged": True,
+    }
+
+
 def _run_3d_smoke_test() -> dict[str, object]:
     import itertools
 
@@ -91,8 +186,8 @@ def _run_3d_smoke_test() -> dict[str, object]:
     import numpy as np
     import pyvista as pv
 
-    from spateo.tdr.models.models_individual.mesh_methods import marching_cube_mesh
     from spateo.tdr.models.models_individual.mesh import construct_surface
+    from spateo.tdr.models.models_individual.mesh_methods import marching_cube_mesh
     from spateo.tdr.models.models_individual.mesh_utils import fix_mesh, uniform_mesh
 
     grid = np.indices((16, 16, 16), dtype=float)
@@ -175,6 +270,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--smoke-test", action="store_true", help="Run a tiny IO/preprocessing import workflow.")
     parser.add_argument(
+        "--smoke-test-slice-qc",
+        action="store_true",
+        help="Run the serial-slice QC and multi-dataset boundary smoke test.",
+    )
+    parser.add_argument(
         "--smoke-test-3d",
         action="store_true",
         help="Run a PyMCubes and Spateo marching-cubes mesh reconstruction workflow.",
@@ -219,7 +319,16 @@ def main() -> int:
         import spateo as st
 
         report["spateo"] = {"version": st.__version__, "path": st.__file__}
-        for dotted in ("io.read_atera", "io.read_visium", "pp.preprocess_spatial"):
+        for dotted in (
+            "io.read_atera",
+            "io.read_visium",
+            "pp.preprocess_spatial",
+            "pp.calculate_slice_quality",
+            "pp.scan_h5ad_series",
+            "pp.scan_h5ad_collection",
+            "pp.apply_high_confidence_policy",
+            "pp.write_slice_quality_outputs",
+        ):
             current = st
             for part in dotted.split("."):
                 current = getattr(current, part)
@@ -231,6 +340,12 @@ def main() -> int:
             report["smoke_test"] = _run_smoke_test()
         except Exception as exc:
             errors.append(f"smoke test failed: {exc}")
+
+    if args.smoke_test_slice_qc or (args.smoke_test and not errors):
+        try:
+            report["slice_quality_smoke_test"] = _run_slice_quality_smoke_test()
+        except Exception as exc:
+            errors.append(f"slice quality smoke test failed: {exc}")
 
     if args.smoke_test_3d and not errors:
         try:

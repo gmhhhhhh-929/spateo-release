@@ -54,3 +54,23 @@ print(inspect.getsource(fix_mesh))
 ```
 
 For PyMeshFix 0.18, the displayed implementation must call `meshfix.repair()` without a `verbose` keyword.
+
+## Serial-slice QC API is missing
+
+If `spateo.pp.calculate_slice_quality` or
+`spateo.pp.scan_h5ad_collection` is absent, first print the imported checkout:
+
+```bash
+python -c "import spateo; print(spateo.__file__)"
+```
+
+If it does not point into the intended repository, activate the target conda
+environment and reinstall that checkout with `python -m pip install -e .`.
+Restart any existing Jupyter kernel afterward. Do not patch `sys.path` as a
+permanent substitute for a correct editable installation.
+
+The detailed KDE, expression-capture, and connected-component HTML viewer is
+provided by the separate `spatial-slice-quality-qc` Codex skill. Its absence is
+not a Python dependency failure. Install or update that skill under the Codex
+skills directory, then invoke its scripts with the verified conda environment's
+Python executable.

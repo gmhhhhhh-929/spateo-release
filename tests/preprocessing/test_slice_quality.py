@@ -38,12 +38,8 @@ def make_series(seed: int = 7, prefix: str = "S") -> ad.AnnData:
         n_obs = 70 + index * 3
         theta = rng.uniform(0, 2 * np.pi, n_obs)
         radius = np.sqrt(rng.uniform(0, 1, n_obs))
-        coordinates.append(
-            np.column_stack([radius * np.cos(theta), 1.4 * radius * np.sin(theta)])
-        )
-        matrices.append(
-            sparse.csr_matrix(rng.poisson(0.35 + 0.02 * index, size=(n_obs, 80)))
-        )
+        coordinates.append(np.column_stack([radius * np.cos(theta), 1.4 * radius * np.sin(theta)]))
+        matrices.append(sparse.csr_matrix(rng.poisson(0.35 + 0.02 * index, size=(n_obs, 80))))
         labels.extend([label] * n_obs)
     matrix = sparse.vstack(matrices).tocsr()
     result = ad.AnnData(matrix)
@@ -83,9 +79,7 @@ def test_scan_one_multislice_h5ad_and_natural_per_slice_files() -> None:
         root = Path(tmp)
         combined = root / "combined.h5ad"
         adata.write_h5ad(combined)
-        one = scan_h5ad_series(
-            [combined], slice_key="slice_id", spatial_key="spatial", layer="counts"
-        )
+        one = scan_h5ad_series([combined], slice_key="slice_id", spatial_key="spatial", layer="counts")
         paths: list[Path] = []
         for slice_id in ["S00", "S01", "S02", "S03", "S04"]:
             subset = adata[adata.obs["slice_id"].astype(str) == slice_id].copy()
@@ -135,12 +129,9 @@ def test_collection_keeps_independent_dataset_boundaries() -> None:
                 },
             },
         )
-        outputs = write_slice_quality_collection_outputs(
-            results, root / "outputs", write_display_payload=True
-        )
+        outputs = write_slice_quality_collection_outputs(results, root / "outputs", write_display_payload=True)
         assert (
-            Path(outputs["study/first"]["metrics"]).parent.resolve()
-            == (root / "outputs" / "study" / "first").resolve()
+            Path(outputs["study/first"]["metrics"]).parent.resolve() == (root / "outputs" / "study" / "first").resolve()
         )
     assert list(results) == ["study/first", "study/second"]
     assert results["study/first"].metrics["slice_id"].str.startswith("A").all()
@@ -196,10 +187,7 @@ def test_multiscale_evidence_records_each_window() -> None:
     )
     enriched = add_multiscale_exclusion_evidence(metrics, windows=(3, 5, 7))
     assert enriched.loc[4, "adaptive_windows_tested"] == "3|5|7"
-    assert [
-        item["window"]
-        for item in json.loads(enriched.loc[4, "adaptive_window_details"])
-    ] == [3, 5, 7]
+    assert [item["window"] for item in json.loads(enriched.loc[4, "adaptive_window_details"])] == [3, 5, 7]
 
 
 def test_two_stage_policy_resolves_only_stable_multidomain_review() -> None:
@@ -251,20 +239,14 @@ def test_public_binary_output_hides_internal_review_fields() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         write_high_confidence_outputs(
             metrics,
-            HighConfidencePolicy(
-                keep_max_score=0.10, exclude_min_score=0.70, unresolved_action="keep"
-            ),
+            HighConfidencePolicy(keep_max_score=0.10, exclude_min_score=0.70, unresolved_action="keep"),
             tmp,
         )
         public = pd.read_csv(Path(tmp) / "slice_quality_binary_calls.csv")
         audit = pd.read_csv(Path(tmp) / "slice_quality_binary_audit.csv")
     assert set(public["final_call"]) == {"keep", "exclude"}
-    assert not {"threshold_band", "threshold_triage_call", "review_resolution"} & set(
-        public
-    )
-    assert {"threshold_band", "threshold_triage_call", "review_resolution"} <= set(
-        audit
-    )
+    assert not {"threshold_band", "threshold_triage_call", "review_resolution"} & set(public)
+    assert {"threshold_band", "threshold_triage_call", "review_resolution"} <= set(audit)
 
 
 def test_core_writer_emits_payload_but_no_html() -> None:
@@ -272,12 +254,8 @@ def test_core_writer_emits_payload_but_no_html() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         source = Path(tmp) / "source.h5ad"
         adata.write_h5ad(source)
-        result = scan_h5ad_series(
-            [source], slice_key="slice_id", spatial_key="spatial", layer="counts"
-        )
-        outputs = write_slice_quality_outputs(
-            result, Path(tmp) / "run", write_display_payload=True
-        )
+        result = scan_h5ad_series([source], slice_key="slice_id", spatial_key="spatial", layer="counts")
+        outputs = write_slice_quality_outputs(result, Path(tmp) / "run", write_display_payload=True)
         assert Path(outputs["display_payload"]).exists()
         assert not (Path(tmp) / "run" / "slice_quality_report.html").exists()
 

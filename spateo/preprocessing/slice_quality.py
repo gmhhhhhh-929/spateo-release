@@ -123,22 +123,12 @@ class HighConfidencePolicy:
             "enable_exclude": bool(value.get("enable_exclude", True)),
             "unresolved_action": str(value.get("unresolved_action", "withhold")),
             "adaptive_exclude_min_score": (
-                None
-                if value.get("adaptive_exclude_min_score") is None
-                else float(value["adaptive_exclude_min_score"])
+                None if value.get("adaptive_exclude_min_score") is None else float(value["adaptive_exclude_min_score"])
             ),
-            "adaptive_min_corroborating_domains": int(
-                value.get("adaptive_min_corroborating_domains", 2)
-            ),
-            "adaptive_severe_domain_threshold": float(
-                value.get("adaptive_severe_domain_threshold", 0.85)
-            ),
-            "adaptive_min_window_stability": float(
-                value.get("adaptive_min_window_stability", 0.90)
-            ),
-            "adaptive_min_score_confidence": float(
-                value.get("adaptive_min_score_confidence", 0.90)
-            ),
+            "adaptive_min_corroborating_domains": int(value.get("adaptive_min_corroborating_domains", 2)),
+            "adaptive_severe_domain_threshold": float(value.get("adaptive_severe_domain_threshold", 0.85)),
+            "adaptive_min_window_stability": float(value.get("adaptive_min_window_stability", 0.90)),
+            "adaptive_min_score_confidence": float(value.get("adaptive_min_score_confidence", 0.90)),
             "benchmark_summary": dict(value.get("benchmark_summary", {})),
         }
         return cls(**fields)
@@ -149,9 +139,7 @@ class _FileSliceData:
     metrics: list[dict[str, Any]] = field(default_factory=list)
     point_samples: dict[str, dict[str, list[Any]]] = field(default_factory=dict)
     pseudobulk: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)
-    celltype_profiles: dict[str, tuple[np.ndarray, np.ndarray]] = field(
-        default_factory=dict
-    )
+    celltype_profiles: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)
     source_info: dict[str, Any] = field(default_factory=dict)
 
 
@@ -177,10 +165,7 @@ _HIGH_BAD_RULES: dict[str, tuple[float, float]] = {
 
 
 def _natural_key(value: Any) -> tuple[Any, ...]:
-    return tuple(
-        int(token) if token.isdigit() else token.lower()
-        for token in re.split(r"(\d+)", str(value))
-    )
+    return tuple(int(token) if token.isdigit() else token.lower() for token in re.split(r"(\d+)", str(value)))
 
 
 def _jsonable(value: Any) -> Any:
@@ -271,14 +256,8 @@ def _summarize_report_statistics(metrics: pd.DataFrame) -> dict[str, dict[str, A
 
 def _report_measurement_context(provenance: Mapping[str, Any]) -> dict[str, Any]:
     """Describe count and coordinate semantics conservatively for report readers."""
-    sources = [
-        item for item in provenance.get("sources", []) if isinstance(item, Mapping)
-    ]
-    count_flags = [
-        bool(item["count_like"])
-        for item in sources
-        if item.get("count_like") is not None
-    ]
+    sources = [item for item in provenance.get("sources", []) if isinstance(item, Mapping)]
+    count_flags = [bool(item["count_like"]) for item in sources if item.get("count_like") is not None]
     if count_flags and all(count_flags):
         count_semantics = "count-like H5AD values; captured-count / UMI proxy"
     elif count_flags and not any(count_flags):
@@ -288,11 +267,7 @@ def _report_measurement_context(provenance: Mapping[str, Any]) -> dict[str, Any]
     else:
         count_semantics = "H5AD value semantics not recorded"
     coordinate_sources = sorted(
-        {
-            str(item.get("coordinate_source"))
-            for item in sources
-            if item.get("coordinate_source")
-        }
+        {str(item.get("coordinate_source")) for item in sources if item.get("coordinate_source")}
     )
     return {
         "count_semantics": count_semantics,
@@ -340,9 +315,7 @@ def _matrix_row_nnz(matrix: Union[np.ndarray, sparse.spmatrix]) -> np.ndarray:
     return np.count_nonzero(matrix, axis=1).astype(float)
 
 
-def _matrix_data_sample(
-    matrix: Union[np.ndarray, sparse.spmatrix], limit: int = 10000
-) -> np.ndarray:
+def _matrix_data_sample(matrix: Union[np.ndarray, sparse.spmatrix], limit: int = 10000) -> np.ndarray:
     if sparse.issparse(matrix):
         data = matrix.data
     else:
@@ -363,9 +336,7 @@ def _is_count_like(matrix: Union[np.ndarray, sparse.spmatrix]) -> bool:
     return bool(np.mean(np.abs(sample - np.rint(sample)) < 1e-6) >= 0.98)
 
 
-def _choose_layer(
-    adata: AnnData, requested: Optional[str]
-) -> tuple[str, Union[np.ndarray, sparse.csr_matrix], bool]:
+def _choose_layer(adata: AnnData, requested: Optional[str]) -> tuple[str, Union[np.ndarray, sparse.csr_matrix], bool]:
     if requested and requested.lower() != "auto":
         name = requested
     else:
@@ -375,9 +346,7 @@ def _choose_layer(
         matrix = _as_matrix(adata.X)
     else:
         if name not in adata.layers:
-            raise KeyError(
-                f"Count layer {name!r} is missing. Available layers: {list(adata.layers.keys())}"
-            )
+            raise KeyError(f"Count layer {name!r} is missing. Available layers: {list(adata.layers.keys())}")
         matrix = _as_matrix(adata.layers[name])
     return name, matrix, _is_count_like(matrix)
 
@@ -411,9 +380,7 @@ def _resolve_slice_labels(
         labels = np.asarray(adata.obs[key].astype(str))
         z_key = _first_obs_column(adata, ("align_z", "z", "z_coord", "spatial_z"))
         if z_key:
-            z_values = pd.to_numeric(adata.obs[z_key], errors="coerce").to_numpy(
-                dtype=float
-            )
+            z_values = pd.to_numeric(adata.obs[z_key], errors="coerce").to_numpy(dtype=float)
         return labels, f"obs:{key}", z_values
 
     candidate_keys: list[str] = []
@@ -429,9 +396,7 @@ def _resolve_slice_labels(
             unique = np.unique(z_values[np.isfinite(z_values)])
             if 1 < unique.size <= max(500, int(math.sqrt(max(adata.n_obs, 1))) * 4):
                 mapping = {value: f"z{value:g}" for value in sorted(unique)}
-                labels = np.asarray(
-                    [mapping.get(value, "zNA") for value in z_values], dtype=object
-                )
+                labels = np.asarray([mapping.get(value, "zNA") for value in z_values], dtype=object)
                 return labels.astype(str), f"obsm:{key_candidate}[:,2]", z_values
     return np.repeat(file_stem, adata.n_obs).astype(str), "file_stem", None
 
@@ -444,9 +409,7 @@ def _resolve_xy(
 ) -> tuple[np.ndarray, np.ndarray, str]:
     if x_key and y_key:
         if x_key not in adata.obs or y_key not in adata.obs:
-            raise KeyError(
-                f"Requested coordinate columns {x_key!r}/{y_key!r} are missing from adata.obs"
-            )
+            raise KeyError(f"Requested coordinate columns {x_key!r}/{y_key!r} are missing from adata.obs")
         return (
             pd.to_numeric(adata.obs[x_key], errors="coerce").to_numpy(dtype=float),
             pd.to_numeric(adata.obs[y_key], errors="coerce").to_numpy(dtype=float),
@@ -455,14 +418,10 @@ def _resolve_xy(
 
     if spatial_key and spatial_key != "auto":
         if spatial_key not in adata.obsm:
-            raise KeyError(
-                f"Requested spatial_key={spatial_key!r} is missing from adata.obsm"
-            )
+            raise KeyError(f"Requested spatial_key={spatial_key!r} is missing from adata.obsm")
         coords = np.asarray(adata.obsm[spatial_key])
         if coords.ndim != 2 or coords.shape[1] < 2:
-            raise ValueError(
-                f"adata.obsm[{spatial_key!r}] must have at least two coordinate columns"
-            )
+            raise ValueError(f"adata.obsm[{spatial_key!r}] must have at least two coordinate columns")
         return (
             coords[:, 0].astype(float),
             coords[:, 1].astype(float),
@@ -486,12 +445,8 @@ def _resolve_xy(
     ):
         if pair[0] in adata.obs and pair[1] in adata.obs:
             return (
-                pd.to_numeric(adata.obs[pair[0]], errors="coerce").to_numpy(
-                    dtype=float
-                ),
-                pd.to_numeric(adata.obs[pair[1]], errors="coerce").to_numpy(
-                    dtype=float
-                ),
+                pd.to_numeric(adata.obs[pair[0]], errors="coerce").to_numpy(dtype=float),
+                pd.to_numeric(adata.obs[pair[1]], errors="coerce").to_numpy(dtype=float),
                 f"obs:{pair[0]},{pair[1]}",
             )
 
@@ -519,9 +474,7 @@ def _resolve_xy(
                     coords[:, 1].astype(float),
                     f"obsm:{key}[:,0:2]",
                 )
-    raise KeyError(
-        "Could not infer spatial x/y coordinates. Pass spatial_key or x_key/y_key explicitly."
-    )
+    raise KeyError("Could not infer spatial x/y coordinates. Pass spatial_key or x_key/y_key explicitly.")
 
 
 def _resolve_order(
@@ -578,9 +531,7 @@ def _component_metrics(xy: np.ndarray, median_nn: float) -> tuple[int, float]:
         return 1, 1.0
     radius = max(median_nn * 3.25, EPS)
     tree = cKDTree(xy)
-    graph = tree.sparse_distance_matrix(
-        tree, max_distance=radius, output_type="coo_matrix"
-    )
+    graph = tree.sparse_distance_matrix(tree, max_distance=radius, output_type="coo_matrix")
     graph.data[:] = 1
     n_comp, labels = csgraph.connected_components(graph.tocsr(), directed=False)
     counts = np.bincount(labels, minlength=n_comp)
@@ -621,9 +572,7 @@ def _raster_hole_fraction(xy: np.ndarray, median_nn: float) -> float:
     return float(hole_count / denom)
 
 
-def _largest_low_depth_cluster(
-    xy: np.ndarray, low: np.ndarray, median_nn: float
-) -> float:
+def _largest_low_depth_cluster(xy: np.ndarray, low: np.ndarray, median_nn: float) -> float:
     indices = np.flatnonzero(low)
     if indices.size == 0:
         return 0.0
@@ -631,18 +580,14 @@ def _largest_low_depth_cluster(
         return float(1 / max(xy.shape[0], 1))
     low_xy = xy[indices]
     tree = cKDTree(low_xy)
-    graph = tree.sparse_distance_matrix(
-        tree, max_distance=median_nn * 2.75, output_type="coo_matrix"
-    )
+    graph = tree.sparse_distance_matrix(tree, max_distance=median_nn * 2.75, output_type="coo_matrix")
     graph.data[:] = 1
     n_comp, comp = csgraph.connected_components(graph.tocsr(), directed=False)
     size = np.bincount(comp, minlength=n_comp).max()
     return float(size / max(xy.shape[0], 1))
 
 
-def _local_depth_metrics(
-    xy: np.ndarray, total_counts: np.ndarray, k: int, median_nn: float
-) -> tuple[float, float]:
+def _local_depth_metrics(xy: np.ndarray, total_counts: np.ndarray, k: int, median_nn: float) -> tuple[float, float]:
     n = xy.shape[0]
     if n < max(8, k + 2):
         return 0.0, 0.0
@@ -710,18 +655,12 @@ def _geometry_metrics(
     aspect = float(math.sqrt(eig[0] / max(eig[1], EPS))) if eig.size >= 2 else 1.0
     scale = math.sqrt(max(eig.sum(), EPS))
     radial = np.linalg.norm(centered, axis=1) / scale
-    local_low, regional_low = _local_depth_metrics(
-        xy, totals, config.k_neighbors, median_nn
-    )
+    local_low, regional_low = _local_depth_metrics(xy, totals, config.k_neighbors, median_nn)
     return {
         "hull_area": area,
-        "cell_density": (
-            float(n / area) if np.isfinite(area) and area > 0 else float("nan")
-        ),
+        "cell_density": (float(n / area) if np.isfinite(area) and area > 0 else float("nan")),
         "median_nn_distance": median_nn,
-        "knn_tail_ratio": (
-            float(max(knn_tail, 0)) if np.isfinite(knn_tail) else float("nan")
-        ),
+        "knn_tail_ratio": (float(max(knn_tail, 0)) if np.isfinite(knn_tail) else float("nan")),
         "component_count": components,
         "largest_component_fraction": largest,
         "fragmentation": float(1.0 - largest),
@@ -791,20 +730,14 @@ def _extract_one_file(
     path = Path(path).expanduser().resolve()
     adata = read_h5ad(path, backed="r")
     try:
-        labels, label_source, z_values = _resolve_slice_labels(
-            adata, slice_key, spatial_key, path.stem
-        )
+        labels, label_source, z_values = _resolve_slice_labels(adata, slice_key, spatial_key, path.stem)
         x, y, coordinate_source = _resolve_xy(adata, spatial_key, x_key, y_key)
         order_values = None
         if order_key:
             if order_key not in adata.obs:
                 raise KeyError(f"order_key={order_key!r} is missing from {path.name}")
-            order_values = pd.to_numeric(
-                adata.obs[order_key], errors="coerce"
-            ).to_numpy(dtype=float)
-        ordered, order_map, order_source = _resolve_order(
-            labels, z_values, order_values
-        )
+            order_values = pd.to_numeric(adata.obs[order_key], errors="coerce").to_numpy(dtype=float)
+        ordered, order_map, order_source = _resolve_order(labels, z_values, order_values)
         if file_prefix and len(ordered) > 1:
             remap = {value: f"{path.stem}::{value}" for value in ordered}
             labels = np.asarray([remap[value] for value in labels], dtype=str)
@@ -814,27 +747,19 @@ def _extract_one_file(
         resolved_layer, matrix, count_like = _choose_layer(adata, layer)
         matrix_totals = _matrix_row_sum(matrix)
         matrix_genes = _matrix_row_nnz(matrix)
-        observed_totals = _obs_metric(
-            adata, ("total_counts", "nCounts", "nCount_RNA", "total_umi", "UMI_count")
-        )
-        observed_genes = _obs_metric(
-            adata, ("n_genes_by_counts", "nGenes", "nFeature_RNA", "gene_count")
-        )
+        observed_totals = _obs_metric(adata, ("total_counts", "nCounts", "nCount_RNA", "total_umi", "UMI_count"))
+        observed_genes = _obs_metric(adata, ("n_genes_by_counts", "nGenes", "nFeature_RNA", "gene_count"))
         total_counts = (
             observed_totals
-            if observed_totals is not None
-            and resolved_layer != "slice_qc_simulated_counts"
+            if observed_totals is not None and resolved_layer != "slice_qc_simulated_counts"
             else matrix_totals
         )
         n_genes = (
             observed_genes
-            if observed_genes is not None
-            and resolved_layer != "slice_qc_simulated_counts"
+            if observed_genes is not None and resolved_layer != "slice_qc_simulated_counts"
             else matrix_genes
         )
-        mito = _obs_metric(
-            adata, ("pct_counts_mt", "pMito", "percent_mito", "mito_ratio")
-        )
+        mito = _obs_metric(adata, ("pct_counts_mt", "pMito", "percent_mito", "mito_ratio"))
         if mito is None and count_like:
             names = np.asarray(adata.var_names.astype(str))
             mito_mask = np.zeros(adata.n_vars, dtype=bool)
@@ -859,11 +784,7 @@ def _extract_one_file(
                     "cluster",
                 ),
             )
-        celltypes = (
-            np.asarray(adata.obs[requested_celltype].astype(str))
-            if requested_celltype
-            else None
-        )
+        celltypes = np.asarray(adata.obs[requested_celltype].astype(str)) if requested_celltype else None
 
         codes = pd.Categorical(labels, categories=ordered, ordered=True).codes
         if np.any(codes < 0):
@@ -887,8 +808,7 @@ def _extract_one_file(
             "count_like": bool(count_like),
             "depth_source": (
                 "obs"
-                if observed_totals is not None
-                and resolved_layer != "slice_qc_simulated_counts"
+                if observed_totals is not None and resolved_layer != "slice_qc_simulated_counts"
                 else resolved_layer
             ),
             "celltype_key": requested_celltype,
@@ -902,9 +822,7 @@ def _extract_one_file(
             sgenes = np.asarray(n_genes[idx], dtype=float)
             geometry = _geometry_metrics(sx, sy, stotal, config)
             if sparse.issparse(bulk):
-                profile = (
-                    np.asarray(bulk.getrow(position).toarray()).ravel().astype(float)
-                )
+                profile = np.asarray(bulk.getrow(position).toarray()).ravel().astype(float)
             else:
                 profile = np.asarray(bulk[position]).ravel().astype(float)
             detected = int(np.count_nonzero(profile))
@@ -918,25 +836,15 @@ def _extract_one_file(
                 "slice_order_value": order_map.get(slice_id, float(position)),
                 "n_locations": int(idx.size),
                 "median_total_counts": median_total,
-                "mean_total_counts": (
-                    float(np.nanmean(stotal)) if stotal.size else float("nan")
-                ),
+                "mean_total_counts": (float(np.nanmean(stotal)) if stotal.size else float("nan")),
                 "median_n_genes": median_genes,
-                "zero_fraction": float(
-                    1.0 - np.nansum(sgenes) / max(idx.size * adata.n_vars, 1)
-                ),
+                "zero_fraction": float(1.0 - np.nansum(sgenes) / max(idx.size * adata.n_vars, 1)),
                 "library_complexity": (
-                    float(np.nanmedian(complexity_values))
-                    if complexity_values.size
-                    else float("nan")
+                    float(np.nanmedian(complexity_values)) if complexity_values.size else float("nan")
                 ),
                 "detected_genes": detected,
                 "detected_gene_fraction": float(detected / max(adata.n_vars, 1)),
-                "median_pct_mito": (
-                    float(np.nanmedian(mito[idx]))
-                    if mito is not None and idx.size
-                    else float("nan")
-                ),
+                "median_pct_mito": (float(np.nanmedian(mito[idx])) if mito is not None and idx.size else float("nan")),
                 "celltype_entropy": float("nan"),
                 **geometry,
             }
@@ -985,26 +893,18 @@ def _align_profiles(
     for i, slice_id in enumerate(slice_order):
         genes, values = pseudobulk[slice_id]
         lookup = {str(gene): j for j, gene in enumerate(genes)}
-        raw[i] = np.asarray(
-            [values[lookup[gene]] for gene in common_sorted], dtype=float
-        )
+        raw[i] = np.asarray([values[lookup[gene]] for gene in common_sorted], dtype=float)
     if fixed_genes is None and raw.shape[1] > max_genes > 0:
-        normalized = np.log1p(
-            raw / np.maximum(raw.sum(axis=1, keepdims=True), EPS) * 10_000
-        )
+        normalized = np.log1p(raw / np.maximum(raw.sum(axis=1, keepdims=True), EPS) * 10_000)
         variance = np.var(normalized, axis=0)
         keep = np.argsort(variance)[-max_genes:]
         raw = raw[:, keep]
         common_sorted = [common_sorted[i] for i in keep]
-    normalized = np.log1p(
-        raw / np.maximum(raw.sum(axis=1, keepdims=True), EPS) * 10_000
-    )
+    normalized = np.log1p(raw / np.maximum(raw.sum(axis=1, keepdims=True), EPS) * 10_000)
     return normalized, tuple(common_sorted)
 
 
-def _profile_continuity(
-    profiles: Optional[np.ndarray], window: int
-) -> tuple[np.ndarray, np.ndarray]:
+def _profile_continuity(profiles: Optional[np.ndarray], window: int) -> tuple[np.ndarray, np.ndarray]:
     if profiles is None:
         return np.asarray([]), np.asarray([])
     n = profiles.shape[0]
@@ -1024,9 +924,7 @@ def _profile_continuity(
             left_mean = np.mean(profiles[left], axis=0)
             right_mean = np.mean(profiles[right], axis=0)
             denom_lr = np.linalg.norm(left_mean) * np.linalg.norm(right_mean)
-            neighbor_agreement[i] = float(
-                np.dot(left_mean, right_mean) / max(denom_lr, EPS)
-            )
+            neighbor_agreement[i] = float(np.dot(left_mean, right_mean) / max(denom_lr, EPS))
     return divergence, neighbor_agreement
 
 
@@ -1037,9 +935,7 @@ def _celltype_js_profiles(
 ) -> np.ndarray:
     if not celltype_profiles:
         return np.full(len(slice_order), np.nan)
-    categories = sorted(
-        set().union(*(set(values[0]) for values in celltype_profiles.values()))
-    )
+    categories = sorted(set().union(*(set(values[0]) for values in celltype_profiles.values())))
     lookup = {category: i for i, category in enumerate(categories)}
     matrix = np.zeros((len(slice_order), len(categories)), dtype=float)
     for i, slice_id in enumerate(slice_order):
@@ -1052,14 +948,10 @@ def _celltype_js_profiles(
     out = np.full(len(slice_order), np.nan)
     half = max(window // 2, 1)
     for i in range(len(slice_order)):
-        neighbors = list(range(max(0, i - half), i)) + list(
-            range(i + 1, min(len(slice_order), i + half + 1))
-        )
+        neighbors = list(range(max(0, i - half), i)) + list(range(i + 1, min(len(slice_order), i + half + 1)))
         if neighbors:
             expected = np.mean(matrix[neighbors], axis=0)
-            out[i] = float(
-                distance.jensenshannon(matrix[i] + EPS, expected + EPS, base=2.0) ** 2
-            )
+            out[i] = float(distance.jensenshannon(matrix[i] + EPS, expected + EPS, base=2.0) ** 2)
     return out
 
 
@@ -1075,9 +967,7 @@ def _robust_scale(values: np.ndarray) -> float:
     return float(std) if np.isfinite(std) and std > EPS else 1.0
 
 
-def _local_expected(
-    values: np.ndarray, window: int
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _local_expected(values: np.ndarray, window: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = len(values)
     half = max(window // 2, 1)
     expected = np.full(n, np.nan)
@@ -1132,16 +1022,13 @@ def _metric_anomaly(
     scale = _robust_scale(residual)
     z = np.maximum((residual - center) / max(scale, EPS), 0)
     global_scale = _robust_scale(values)
-    agreement_penalty = np.exp(
-        -np.nan_to_num(disagreement, nan=0.0) / max(global_scale * 2.5, EPS)
-    )
+    agreement_penalty = np.exp(-np.nan_to_num(disagreement, nan=0.0) / max(global_scale * 2.5, EPS))
 
     magnitude = np.zeros_like(values, dtype=float)
     valid = np.isfinite(values) & np.isfinite(expected)
     if direction == "low":
         magnitude[valid] = np.maximum(
-            (expected[valid] - values[valid])
-            / np.maximum(np.abs(expected[valid]), EPS),
+            (expected[valid] - values[valid]) / np.maximum(np.abs(expected[valid]), EPS),
             0,
         )
     else:
@@ -1163,9 +1050,7 @@ def _metric_anomaly(
     return score, expected, two_sided
 
 
-def _weighted_available(
-    frame: pd.DataFrame, weights: Mapping[str, float]
-) -> np.ndarray:
+def _weighted_available(frame: pd.DataFrame, weights: Mapping[str, float]) -> np.ndarray:
     numerator = np.zeros(len(frame), dtype=float)
     denominator = np.zeros(len(frame), dtype=float)
     for key, weight in weights.items():
@@ -1182,17 +1067,10 @@ def _top_two_evidence(frame: pd.DataFrame, columns: Sequence[str]) -> np.ndarray
     available = [key for key in columns if key in frame]
     if not available:
         return np.zeros(len(frame), dtype=float)
-    values = (
-        frame[available]
-        .apply(pd.to_numeric, errors="coerce")
-        .fillna(0)
-        .to_numpy(dtype=float)
-    )
+    values = frame[available].apply(pd.to_numeric, errors="coerce").fillna(0).to_numpy(dtype=float)
     values.sort(axis=1)
     strongest = values[:, -1]
-    second = (
-        values[:, -2] if values.shape[1] >= 2 else np.zeros(len(frame), dtype=float)
-    )
+    second = values[:, -2] if values.shape[1] >= 2 else np.zeros(len(frame), dtype=float)
     return 0.65 * strongest + 0.35 * second
 
 
@@ -1239,8 +1117,7 @@ def _score_metrics(
             valid = np.isfinite(values) & np.isfinite(expected)
             relative_drop = np.zeros(len(out), dtype=float)
             relative_drop[valid] = np.maximum(
-                (expected[valid] - values[valid])
-                / np.maximum(np.abs(expected[valid]), EPS),
+                (expected[valid] - values[valid]) / np.maximum(np.abs(expected[valid]), EPS),
                 0.0,
             )
             support_valid = np.isfinite(values) & np.isfinite(support_expected)
@@ -1252,9 +1129,7 @@ def _score_metrics(
                     0.0,
                 ),
             )
-            direct_effect = np.clip(
-                (relative_drop - mild) / max(severe - mild, EPS), 0, 1
-            )
+            direct_effect = np.clip((relative_drop - mild) / max(severe - mild, EPS), 0, 1)
             direct_effect *= np.where(two_sided, 1.0, 0.72)
             score = np.maximum(score, direct_effect)
         out[f"{metric}_anomaly"] = score
@@ -1284,15 +1159,11 @@ def _score_metrics(
         out[f"{metric}_anomaly"] = score
         two_sided_matrix.append(two_sided)
 
-    expression_divergence, expression_neighbor_similarity = _profile_continuity(
-        profiles, window
-    )
+    expression_divergence, expression_neighbor_similarity = _profile_continuity(profiles, window)
     if expression_divergence.size:
         out["expression_profile_divergence"] = expression_divergence
         out["neighbor_expression_similarity"] = expression_neighbor_similarity
-        div_score, _, _ = _metric_anomaly(
-            expression_divergence, window, "high", 0.03, 0.18
-        )
+        div_score, _, _ = _metric_anomaly(expression_divergence, window, "high", 0.03, 0.18)
         # Absolute divergence matters even if several adjacent slices are affected.
         absolute = np.clip((np.nan_to_num(expression_divergence) - 0.06) / 0.24, 0, 1)
         agreement = np.clip(
@@ -1304,9 +1175,9 @@ def _score_metrics(
     elif "expression_profile_anomaly" in out:
         # Re-scoring a saved metric table (used by the repeated calibration
         # benchmark) must retain the real profile-continuity evidence.
-        out["expression_profile_anomaly"] = pd.to_numeric(
-            out["expression_profile_anomaly"], errors="coerce"
-        ).fillna(0.0)
+        out["expression_profile_anomaly"] = pd.to_numeric(out["expression_profile_anomaly"], errors="coerce").fillna(
+            0.0
+        )
     else:
         out["expression_profile_divergence"] = np.nan
         out["neighbor_expression_similarity"] = np.nan
@@ -1316,9 +1187,7 @@ def _score_metrics(
     celltype_js = _celltype_js_profiles(celltype_profiles, slice_order, window)
     if np.isfinite(celltype_js).any():
         out["celltype_js_divergence"] = celltype_js
-        out["celltype_composition_anomaly"] = np.clip(
-            (np.nan_to_num(celltype_js) - 0.08) / 0.32, 0, 1
-        )
+        out["celltype_composition_anomaly"] = np.clip((np.nan_to_num(celltype_js) - 0.08) / 0.32, 0, 1)
     elif "celltype_composition_anomaly" in out:
         out["celltype_composition_anomaly"] = pd.to_numeric(
             out["celltype_composition_anomaly"], errors="coerce"
@@ -1408,9 +1277,7 @@ def _score_metrics(
         + 0.18 * out["continuity_domain_score"].to_numpy()
     )
     severe_single = np.max(domains, axis=1)
-    raw_score = np.maximum(
-        raw_score, np.clip((severe_single - 0.68) * 0.78 + 0.48, 0, 1)
-    )
+    raw_score = np.maximum(raw_score, np.clip((severe_single - 0.68) * 0.78 + 0.48, 0, 1))
     if two_sided_matrix:
         internal = np.any(np.vstack(two_sided_matrix), axis=0)
     else:
@@ -1422,25 +1289,11 @@ def _score_metrics(
     expression = out["expression_domain_score"].to_numpy()
     damage = out["damage_domain_score"].to_numpy()
     continuity = out["continuity_domain_score"].to_numpy()
-    holes = out.get("hole_fraction_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(
-        dtype=float
-    )
-    density_only = (
-        (density >= 0.48) & (expression < 0.32) & (damage < 0.38) & (continuity < 0.45)
-    )
+    holes = out.get("hole_fraction_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(dtype=float)
+    density_only = (density >= 0.48) & (expression < 0.32) & (damage < 0.38) & (continuity < 0.45)
     taper_like = (
-        (
-            out.get("n_locations_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(
-                dtype=float
-            )
-            >= 0.45
-        )
-        & (
-            out.get("cell_density_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(
-                dtype=float
-            )
-            < 0.30
-        )
+        (out.get("n_locations_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(dtype=float) >= 0.45)
+        & (out.get("cell_density_anomaly", pd.Series(np.zeros(len(out)))).to_numpy(dtype=float) < 0.30)
         & (holes < 0.30)
         & (expression < 0.35)
     )
@@ -1459,28 +1312,13 @@ def _score_metrics(
     for i in range(len(out)):
         domain_values = dict(zip(domain_names, domains[i]))
         strong = [name for name, value in domain_values.items() if value >= 0.45]
-        severe = [
-            name
-            for name, value in domain_values.items()
-            if value >= config.severe_domain_threshold
-        ]
+        severe = [name for name, value in domain_values.items() if value >= config.severe_domain_threshold]
         expression_severe = expression[i] >= config.severe_domain_threshold
-        metric_columns = [
-            key
-            for key in out.columns
-            if key.endswith("_anomaly") and key != "quality_anomaly"
-        ]
-        severe_metric = (
-            max((float(out.loc[i, key]) for key in metric_columns), default=0.0) >= 0.75
-        )
-        can_exclude = internal[i] and not bool(
-            out.loc[i, "partial_structure_protection"]
-        )
+        metric_columns = [key for key in out.columns if key.endswith("_anomaly") and key != "quality_anomaly"]
+        severe_metric = max((float(out.loc[i, key]) for key in metric_columns), default=0.0) >= 0.75
+        can_exclude = internal[i] and not bool(out.loc[i, "partial_structure_protection"])
         if can_exclude and (
-            (
-                final_score[i] >= config.exclude_threshold
-                and len(strong) >= config.minimum_corrob_domains
-            )
+            (final_score[i] >= config.exclude_threshold and len(strong) >= config.minimum_corrob_domains)
             or expression_severe
             or (density[i] >= 0.82 and holes[i] >= 0.55 and continuity[i] >= 0.42)
         ):
@@ -1546,16 +1384,10 @@ def add_multiscale_exclusion_evidence(
         raise ValueError("severe_domain_threshold must be between 0 and 1")
 
     available_windows = sorted(
-        {
-            int(window)
-            for window in windows
-            if int(window) >= 3 and int(window) % 2 == 1 and int(window) <= len(metrics)
-        }
+        {int(window) for window in windows if int(window) >= 3 and int(window) % 2 == 1 and int(window) <= len(metrics)}
     )
     if not available_windows:
-        raise ValueError(
-            "windows must contain at least one odd width between 3 and the series length"
-        )
+        raise ValueError("windows must contain at least one odd width between 3 and the series length")
 
     active_config = config or SliceQCConfig(window=available_windows[0])
     domain_columns = [
@@ -1568,36 +1400,23 @@ def add_multiscale_exclusion_evidence(
     score_matrix: list[np.ndarray] = []
     support_matrix: list[np.ndarray] = []
     exclude_matrix: list[np.ndarray] = []
-    detail_by_slice: dict[str, list[dict[str, Any]]] = {
-        slice_id: [] for slice_id in slice_ids
-    }
+    detail_by_slice: dict[str, list[dict[str, Any]]] = {slice_id: [] for slice_id in slice_ids}
 
     for window in available_windows:
         scored = _score_metrics(metrics, None, {}, active_config, window)
         scored = scored.set_index(scored["slice_id"].astype(str)).loc[slice_ids]
-        domains = (
-            scored[domain_columns].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-        )
+        domains = scored[domain_columns].apply(pd.to_numeric, errors="coerce").fillna(0.0)
         max_domain = domains.max(axis=1).to_numpy(dtype=float)
-        corroborating = (
-            pd.to_numeric(scored["corroborating_domains"], errors="coerce")
-            .fillna(0)
-            .to_numpy(dtype=float)
-        )
+        corroborating = pd.to_numeric(scored["corroborating_domains"], errors="coerce").fillna(0).to_numpy(dtype=float)
         detector_exclude = scored["recommendation"].astype(str).eq("exclude").to_numpy()
         supported = (
             detector_exclude
             & scored["window_context"].astype(str).eq("two_sided").to_numpy()
-            & ~scored["partial_structure_protection"]
-            .fillna(False)
-            .astype(bool)
-            .to_numpy()
+            & ~scored["partial_structure_protection"].fillna(False).astype(bool).to_numpy()
             & (corroborating >= minimum_corroborating_domains)
             & (max_domain >= severe_domain_threshold)
         )
-        scores = pd.to_numeric(
-            scored["quality_anomaly_score"], errors="coerce"
-        ).to_numpy(dtype=float)
+        scores = pd.to_numeric(scored["quality_anomaly_score"], errors="coerce").to_numpy(dtype=float)
         score_matrix.append(scores)
         support_matrix.append(supported)
         exclude_matrix.append(detector_exclude)
@@ -1605,9 +1424,7 @@ def add_multiscale_exclusion_evidence(
             detail_by_slice[slice_id].append(
                 {
                     "window": int(window),
-                    "score": (
-                        float(scores[index]) if np.isfinite(scores[index]) else None
-                    ),
+                    "score": (float(scores[index]) if np.isfinite(scores[index]) else None),
                     "detector_call": str(scored.iloc[index]["recommendation"]),
                     "corroborating_domains": int(corroborating[index]),
                     "maximum_domain_score": float(max_domain[index]),
@@ -1617,16 +1434,13 @@ def add_multiscale_exclusion_evidence(
 
     stacked_scores = np.vstack(score_matrix)
     out = metrics.copy()
-    out["adaptive_windows_tested"] = "|".join(
-        str(window) for window in available_windows
-    )
+    out["adaptive_windows_tested"] = "|".join(str(window) for window in available_windows)
     out["adaptive_window_stability"] = np.mean(np.vstack(support_matrix), axis=0)
     out["adaptive_exclude_call_fraction"] = np.mean(np.vstack(exclude_matrix), axis=0)
     out["adaptive_min_score_across_windows"] = np.nanmin(stacked_scores, axis=0)
     out["adaptive_median_score_across_windows"] = np.nanmedian(stacked_scores, axis=0)
     out["adaptive_window_details"] = [
-        json.dumps(detail_by_slice[slice_id], ensure_ascii=False, separators=(",", ":"))
-        for slice_id in slice_ids
+        json.dumps(detail_by_slice[slice_id], ensure_ascii=False, separators=(",", ":")) for slice_id in slice_ids
     ]
     return out
 
@@ -1646,9 +1460,7 @@ def _choose_window(
         }
     )
     if not candidates:
-        return 3, [
-            {"window": 3, "utility": None, "note": "fewer slices than candidate widths"}
-        ]
+        return 3, [{"window": 3, "utility": None, "note": "fewer slices than candidate widths"}]
     trials: list[dict[str, Any]] = []
     for window in candidates:
         baseline = _score_metrics(metrics, profiles, celltype_profiles, config, window)
@@ -1669,22 +1481,15 @@ def _choose_window(
                 "detected_gene_fraction",
             ):
                 if key in perturbed:
-                    perturbed.loc[target, key] = (
-                        float(perturbed.loc[target, key]) * 0.24
-                    )
+                    perturbed.loc[target, key] = float(perturbed.loc[target, key]) * 0.24
             if "zero_fraction" in perturbed:
                 perturbed.loc[target, "zero_fraction"] = min(
                     0.999, float(perturbed.loc[target, "zero_fraction"]) + 0.35
                 )
-            scored = _score_metrics(
-                perturbed, profiles, celltype_profiles, config, window
-            )
+            scored = _score_metrics(perturbed, profiles, celltype_profiles, config, window)
             hits.append(scored.loc[target, "recommendation"] in {"review", "exclude"})
             deltas.append(
-                float(
-                    scored.loc[target, "quality_anomaly_score"]
-                    - baseline.loc[target, "quality_anomaly_score"]
-                )
+                float(scored.loc[target, "quality_anomaly_score"] - baseline.loc[target, "quality_anomaly_score"])
             )
         recall = float(np.mean(hits)) if hits else 0.0
         mean_delta = float(np.mean(deltas)) if deltas else 0.0
@@ -1758,9 +1563,7 @@ def scan_h5ad_series(
         all_metrics.extend(extracted.metrics)
         overlap = set(point_samples).intersection(extracted.point_samples)
         if overlap:
-            raise ValueError(
-                f"Duplicate slice identifiers after input resolution: {sorted(overlap)}"
-            )
+            raise ValueError(f"Duplicate slice identifiers after input resolution: {sorted(overlap)}")
         point_samples.update(extracted.point_samples)
         pseudobulk.update(extracted.pseudobulk)
         celltype_profiles.update(extracted.celltype_profiles)
@@ -1768,9 +1571,9 @@ def scan_h5ad_series(
 
     metrics = pd.DataFrame(all_metrics)
     metrics["_natural"] = metrics["slice_id"].map(_natural_key)
-    metrics = metrics.sort_values(
-        ["_input_file_index", "slice_order_value", "_natural"], kind="stable"
-    ).drop(columns=["_input_file_index", "_natural"])
+    metrics = metrics.sort_values(["_input_file_index", "slice_order_value", "_natural"], kind="stable").drop(
+        columns=["_input_file_index", "_natural"]
+    )
     metrics = metrics.reset_index(drop=True)
     metrics["slice_index"] = np.arange(len(metrics), dtype=int)
     slice_order = metrics["slice_id"].astype(str).tolist()
@@ -1781,15 +1584,11 @@ def scan_h5ad_series(
     if isinstance(config.window, str):
         if config.window.lower() != "auto":
             raise ValueError("config.window must be an odd integer or 'auto'")
-        selected_window, window_trials = _choose_window(
-            metrics, profiles, celltype_profiles, config
-        )
+        selected_window, window_trials = _choose_window(metrics, profiles, celltype_profiles, config)
     else:
         selected_window = int(config.window)
         window_trials = [{"window": selected_window, "selected": True, "mode": "fixed"}]
-    scored = _score_metrics(
-        metrics, profiles, celltype_profiles, config, selected_window
-    )
+    scored = _score_metrics(metrics, profiles, celltype_profiles, config, selected_window)
     provenance = {
         "schema_version": SCHEMA_VERSION,
         "method": "multi-domain local-window pre-alignment slice QC",
@@ -1798,9 +1597,7 @@ def scan_h5ad_series(
         "window_trials": _jsonable(window_trials),
         "sources": sources,
         "expression_profile_gene_policy": (
-            "fixed_from_reference"
-            if profile_gene_names is not None
-            else "selected_by_variance"
+            "fixed_from_reference" if profile_gene_names is not None else "selected_by_variance"
         ),
         "expression_profile_gene_count": int(len(profile_genes)),
         "observable_depth_note": (
@@ -1860,9 +1657,7 @@ def calculate_slice_quality(
         adata.uns["slice_quality_qc"] = {
             "provenance": _jsonable(result.provenance),
             "slice_calls": _jsonable(
-                result.metrics[
-                    ["slice_id", "quality_anomaly_score", "recommendation", "reason"]
-                ].to_dict("records")
+                result.metrics[["slice_id", "quality_anomaly_score", "recommendation", "reason"]].to_dict("records")
             ),
         }
     return result.metrics
@@ -1894,18 +1689,12 @@ def scan_h5ad_collection(
         Concatenating unrelated datasets would create invalid neighbor pairs.
     """
     if not isinstance(datasets, Mapping) or not datasets:
-        raise ValueError(
-            "datasets must be a non-empty mapping of dataset_id to H5AD path(s)"
-        )
-    options_by_dataset = {
-        str(key).strip(): dict(value) for key, value in (dataset_options or {}).items()
-    }
+        raise ValueError("datasets must be a non-empty mapping of dataset_id to H5AD path(s)")
+    options_by_dataset = {str(key).strip(): dict(value) for key, value in (dataset_options or {}).items()}
     dataset_ids = {str(key).strip() for key in datasets}
     unknown_dataset_options = set(options_by_dataset).difference(dataset_ids)
     if unknown_dataset_options:
-        raise KeyError(
-            f"dataset_options contains unknown dataset ids: {sorted(unknown_dataset_options)}"
-        )
+        raise KeyError(f"dataset_options contains unknown dataset ids: {sorted(unknown_dataset_options)}")
     allowed_options = {
         "slice_key",
         "spatial_key",
@@ -1924,18 +1713,14 @@ def scan_h5ad_collection(
         if not dataset_id:
             raise ValueError("dataset ids must be non-empty strings")
         if dataset_id in results:
-            raise ValueError(
-                f"duplicate dataset id after string normalization: {dataset_id!r}"
-            )
+            raise ValueError(f"duplicate dataset id after string normalization: {dataset_id!r}")
         paths = [raw_paths] if isinstance(raw_paths, (str, Path)) else list(raw_paths)
         if not paths:
             raise ValueError(f"dataset {dataset_id!r} has no H5AD inputs")
         options = dict(options_by_dataset.get(dataset_id, {}))
         unexpected = set(options).difference(allowed_options)
         if unexpected:
-            raise TypeError(
-                f"unsupported options for dataset {dataset_id!r}: {sorted(unexpected)}"
-            )
+            raise TypeError(f"unsupported options for dataset {dataset_id!r}: {sorted(unexpected)}")
         dataset_config = options.pop("config", config)
         results[dataset_id] = scan_h5ad_series(
             paths,
@@ -2006,9 +1791,7 @@ def simulate_slice_quality_artifacts(
         raise KeyError(f"spatial_key={spatial_key!r} is missing from adata.obsm")
     resolved_layer, matrix, count_like = _choose_layer(adata, layer)
     if not count_like:
-        raise ValueError(
-            "Simulation requires a non-negative integer-like count matrix/layer"
-        )
+        raise ValueError("Simulation requires a non-negative integer-like count matrix/layer")
     labels = np.asarray(adata.obs[slice_key].astype(str))
     coords = np.asarray(adata.obsm[spatial_key])[:, :2].astype(float)
     rng = np.random.default_rng(random_seed)
@@ -2071,11 +1854,7 @@ def simulate_slice_quality_artifacts(
     for uns_key, original_value in adata.uns.items():
         copied_value = out.uns.get(uns_key)
         if isinstance(original_value, Mapping) and isinstance(copied_value, np.ndarray):
-            if (
-                copied_value.dtype == object
-                and copied_value.size == 1
-                and isinstance(copied_value.flat[0], Mapping)
-            ):
+            if copied_value.dtype == object and copied_value.size == 1 and isinstance(copied_value.flat[0], Mapping):
                 out.uns[uns_key] = copy.deepcopy(original_value)
     raw_var_index_repaired = False
     if out.raw is not None and "_index" in out.raw.var.columns:
@@ -2096,24 +1875,16 @@ def simulate_slice_quality_artifacts(
         "random_seed": int(random_seed),
         "source_layer": resolved_layer,
         "output_layer": output_layer,
-        "artifacts_json": json.dumps(
-            normalized_plan, ensure_ascii=False, sort_keys=True
-        ),
+        "artifacts_json": json.dumps(normalized_plan, ensure_ascii=False, sort_keys=True),
         "raw_var_index_repaired_for_h5ad": bool(raw_var_index_repaired),
-        "ground_truth_slices": np.asarray(
-            sorted({str(item["slice_id"]) for item in normalized_plan}), dtype=str
-        ),
+        "ground_truth_slices": np.asarray(sorted({str(item["slice_id"]) for item in normalized_plan}), dtype=str),
     }
     return out
 
 
-def evaluate_slice_calls(
-    metrics: pd.DataFrame, ground_truth: Mapping[str, bool]
-) -> dict[str, Any]:
+def evaluate_slice_calls(metrics: pd.DataFrame, ground_truth: Mapping[str, bool]) -> dict[str, Any]:
     """Evaluate suspicious (review or exclude) calls against explicit ground truth."""
-    truth = np.asarray(
-        [bool(ground_truth.get(str(value), False)) for value in metrics["slice_id"]]
-    )
+    truth = np.asarray([bool(ground_truth.get(str(value), False)) for value in metrics["slice_id"]])
     calls = metrics["recommendation"].astype(str)
     predicted = calls.ne("keep").to_numpy()
     tp = int(np.sum(truth & predicted))
@@ -2160,9 +1931,7 @@ def evaluate_paired_simulation(
     ):
         missing = required.difference(frame.columns)
         if missing:
-            raise KeyError(
-                f"{name} metrics are missing required columns: {sorted(missing)}"
-            )
+            raise KeyError(f"{name} metrics are missing required columns: {sorted(missing)}")
         if frame["slice_id"].astype(str).duplicated().any():
             raise ValueError(f"{name} metrics contain duplicate slice_id values")
 
@@ -2182,53 +1951,39 @@ def evaluate_paired_simulation(
             "recommendation": "simulated_recommendation",
         }
     )
-    paired = baseline.merge(
-        simulated, on="slice_id", how="outer", validate="one_to_one", indicator=True
-    )
+    paired = baseline.merge(simulated, on="slice_id", how="outer", validate="one_to_one", indicator=True)
     if not paired["_merge"].eq("both").all():
-        missing = paired.loc[
-            paired["_merge"].ne("both"), ["slice_id", "_merge"]
-        ].to_dict("records")
+        missing = paired.loc[paired["_merge"].ne("both"), ["slice_id", "_merge"]].to_dict("records")
         raise ValueError(f"Baseline and simulated slice sets differ: {missing}")
     paired = paired.drop(columns="_merge")
 
     artifact_map: dict[str, list[str]] = {}
     for artifact in artifacts:
-        artifact_map.setdefault(str(artifact["slice_id"]), []).append(
-            str(artifact["kind"])
-        )
+        artifact_map.setdefault(str(artifact["slice_id"]), []).append(str(artifact["kind"]))
     paired["injected"] = paired["slice_id"].isin(artifact_map)
-    paired["artifact"] = paired["slice_id"].map(
-        lambda value: "+".join(artifact_map.get(str(value), [])) or "none"
-    )
+    paired["artifact"] = paired["slice_id"].map(lambda value: "+".join(artifact_map.get(str(value), [])) or "none")
     paired["score_delta"] = paired["simulated_score"] - paired["baseline_score"]
     paired["baseline_suspicious"] = paired["baseline_recommendation"].ne("keep")
     paired["detected_after"] = paired["simulated_recommendation"].ne("keep")
     paired["newly_flagged"] = ~paired["baseline_suspicious"] & paired["detected_after"]
     rank = {"keep": 0, "review": 1, "exclude": 2}
-    paired["call_worsened"] = paired["simulated_recommendation"].map(rank).fillna(
-        -1
-    ) > paired["baseline_recommendation"].map(rank).fillna(-1)
+    paired["call_worsened"] = paired["simulated_recommendation"].map(rank).fillna(-1) > paired[
+        "baseline_recommendation"
+    ].map(rank).fillna(-1)
 
     injected = paired[paired["injected"]]
     eligible = injected[~injected["baseline_suspicious"]]
     noninjected = paired[~paired["injected"]]
-    median_delta = (
-        float(injected["score_delta"].median()) if len(injected) else float("nan")
-    )
+    median_delta = float(injected["score_delta"].median()) if len(injected) else float("nan")
     summary = {
         "comparison": "paired baseline versus simulated counts using the same slice window",
         "injected_total": int(len(injected)),
         "injected_detected_after": int(injected["detected_after"].sum()),
-        "injected_detection_rate_after": (
-            float(injected["detected_after"].mean()) if len(injected) else 0.0
-        ),
+        "injected_detection_rate_after": (float(injected["detected_after"].mean()) if len(injected) else 0.0),
         "injected_preexisting_nonkeep": int(injected["baseline_suspicious"].sum()),
         "injected_baseline_keep": int(len(eligible)),
         "injected_newly_flagged": int(eligible["newly_flagged"].sum()),
-        "injected_new_flag_rate": (
-            float(eligible["newly_flagged"].mean()) if len(eligible) else None
-        ),
+        "injected_new_flag_rate": (float(eligible["newly_flagged"].mean()) if len(eligible) else None),
         "injected_score_increased": int((injected["score_delta"] > 0).sum()),
         "injected_median_score_delta": median_delta,
         "injected_call_worsened": int(injected["call_worsened"].sum()),
@@ -2240,9 +1995,7 @@ def evaluate_paired_simulation(
             "Review injected detection, score deltas, and non-injected newly flagged slices separately."
         ),
     }
-    return _jsonable(summary), paired.sort_values(
-        "slice_id", key=lambda series: series.map(_natural_key)
-    )
+    return _jsonable(summary), paired.sort_values("slice_id", key=lambda series: series.map(_natural_key))
 
 
 def apply_high_confidence_policy(
@@ -2278,13 +2031,9 @@ def apply_high_confidence_policy(
     if adaptive_enabled:
         assert policy.adaptive_exclude_min_score is not None
         if not 0 <= policy.adaptive_exclude_min_score < policy.exclude_min_score:
-            raise ValueError(
-                "adaptive exclude threshold must be lower than the standard exclude threshold"
-            )
+            raise ValueError("adaptive exclude threshold must be lower than the standard exclude threshold")
         if policy.adaptive_min_corroborating_domains < 2:
-            raise ValueError(
-                "adaptive exclusion requires at least two corroborating domains"
-            )
+            raise ValueError("adaptive exclusion requires at least two corroborating domains")
         for name, value in {
             "adaptive_severe_domain_threshold": policy.adaptive_severe_domain_threshold,
             "adaptive_min_window_stability": policy.adaptive_min_window_stability,
@@ -2304,50 +2053,28 @@ def apply_high_confidence_policy(
         }
         adaptive_missing = adaptive_required.difference(metrics.columns)
         if adaptive_missing:
-            raise KeyError(
-                "adaptive policy requires multi-window evidence columns: "
-                f"{sorted(adaptive_missing)}"
-            )
+            raise KeyError("adaptive policy requires multi-window evidence columns: " f"{sorted(adaptive_missing)}")
 
     out = metrics.copy()
-    score = pd.to_numeric(out["quality_anomaly_score"], errors="coerce").to_numpy(
-        dtype=float
-    )
+    score = pd.to_numeric(out["quality_anomaly_score"], errors="coerce").to_numpy(dtype=float)
     recommendation = out["recommendation"].astype(str).to_numpy()
     if "window_context" in out:
         two_sided = out["window_context"].astype(str).eq("two_sided").to_numpy()
     else:
         two_sided = np.ones(len(out), dtype=bool)
     if "partial_structure_protection" in out:
-        protected = (
-            out["partial_structure_protection"].fillna(False).astype(bool).to_numpy()
-        )
+        protected = out["partial_structure_protection"].fillna(False).astype(bool).to_numpy()
     else:
         protected = np.zeros(len(out), dtype=bool)
-    context_ok = (
-        two_sided if policy.require_two_sided else np.ones(len(out), dtype=bool)
-    )
-    detector_keep = (
-        recommendation == "keep"
-        if policy.require_detector_call
-        else np.ones(len(out), dtype=bool)
-    )
-    detector_exclude = (
-        recommendation == "exclude"
-        if policy.require_detector_call
-        else np.ones(len(out), dtype=bool)
-    )
+    context_ok = two_sided if policy.require_two_sided else np.ones(len(out), dtype=bool)
+    detector_keep = recommendation == "keep" if policy.require_detector_call else np.ones(len(out), dtype=bool)
+    detector_exclude = recommendation == "exclude" if policy.require_detector_call else np.ones(len(out), dtype=bool)
     finite_score = np.isfinite(score)
     threshold_band = np.full(len(out), "review", dtype=object)
     threshold_band[finite_score & (score <= policy.keep_max_score)] = "keep"
     threshold_band[finite_score & (score >= policy.exclude_min_score)] = "exclude"
     publish_keep = (
-        policy.enable_keep
-        & finite_score
-        & (score <= policy.keep_max_score)
-        & detector_keep
-        & context_ok
-        & ~protected
+        policy.enable_keep & finite_score & (score <= policy.keep_max_score) & detector_keep & context_ok & ~protected
     )
     standard_exclude = (
         policy.enable_exclude
@@ -2376,23 +2103,11 @@ def apply_high_confidence_policy(
             .fillna(0.0)
             .to_numpy(dtype=float)
         )
-        corroborating = (
-            pd.to_numeric(out["corroborating_domains"], errors="coerce")
-            .fillna(0)
-            .to_numpy()
-        )
-        score_confidence = (
-            pd.to_numeric(out["score_confidence"], errors="coerce").fillna(0).to_numpy()
-        )
-        window_stability = (
-            pd.to_numeric(out["adaptive_window_stability"], errors="coerce")
-            .fillna(0)
-            .to_numpy()
-        )
+        corroborating = pd.to_numeric(out["corroborating_domains"], errors="coerce").fillna(0).to_numpy()
+        score_confidence = pd.to_numeric(out["score_confidence"], errors="coerce").fillna(0).to_numpy()
+        window_stability = pd.to_numeric(out["adaptive_window_stability"], errors="coerce").fillna(0).to_numpy()
         multiscale_min_score = (
-            pd.to_numeric(out["adaptive_min_score_across_windows"], errors="coerce")
-            .fillna(-np.inf)
-            .to_numpy()
+            pd.to_numeric(out["adaptive_min_score_across_windows"], errors="coerce").fillna(-np.inf).to_numpy()
         )
         detector_candidate = (
             np.isin(recommendation, ["review", "exclude"])
@@ -2430,9 +2145,7 @@ def apply_high_confidence_policy(
         published = publish_keep | publish_exclude
     review_resolution = np.full(len(out), "not_applicable", dtype=object)
     review_resolution[review_queue & adaptive_exclude] = "exclude"
-    review_resolution[review_queue & ~adaptive_exclude] = (
-        "keep" if policy.unresolved_action == "keep" else "withhold"
-    )
+    review_resolution[review_queue & ~adaptive_exclude] = "keep" if policy.unresolved_action == "keep" else "withhold"
     confidence = np.zeros(len(out), dtype=float)
     confidence[publish_keep] = np.clip(
         (policy.keep_max_score - score[publish_keep]) / max(policy.keep_max_score, EPS),
@@ -2440,24 +2153,19 @@ def apply_high_confidence_policy(
         1,
     )
     confidence[publish_exclude] = np.clip(
-        (score[publish_exclude] - policy.exclude_min_score)
-        / max(1 - policy.exclude_min_score, EPS),
+        (score[publish_exclude] - policy.exclude_min_score) / max(1 - policy.exclude_min_score, EPS),
         0,
         1,
     )
     if adaptive_enabled and np.any(adaptive_exclude):
         assert policy.adaptive_exclude_min_score is not None
         confidence[adaptive_exclude] = np.minimum(
-            pd.to_numeric(
-                out.loc[adaptive_exclude, "adaptive_window_stability"], errors="coerce"
-            )
+            pd.to_numeric(out.loc[adaptive_exclude, "adaptive_window_stability"], errors="coerce")
             .fillna(0.0)
             .to_numpy(dtype=float),
             np.clip(
                 (score[adaptive_exclude] - policy.adaptive_exclude_min_score)
-                / max(
-                    policy.exclude_min_score - policy.adaptive_exclude_min_score, EPS
-                ),
+                / max(policy.exclude_min_score - policy.adaptive_exclude_min_score, EPS),
                 0,
                 1,
             ),
@@ -2472,12 +2180,8 @@ def apply_high_confidence_policy(
             "operational keep: exclusion evidence did not pass the independently validated "
             "high-specificity exclusion gate"
         )
-    reasons[publish_keep] = (
-        "published keep: calibrated low anomaly and detector agreement"
-    )
-    reasons[standard_exclude] = (
-        "published exclude: calibrated high anomaly and detector agreement"
-    )
+    reasons[publish_keep] = "published keep: calibrated low anomaly and detector agreement"
+    reasons[standard_exclude] = "published exclude: calibrated high anomaly and detector agreement"
     if policy.unresolved_action == "keep":
         reasons[review_queue & ~adaptive_exclude] = (
             "published keep: internal review was resolved to keep because the fine-screen "
@@ -2488,13 +2192,9 @@ def apply_high_confidence_policy(
         "stable across slice-window scales"
     )
 
-    threshold_triage_reason = np.full(
-        len(out), "score is inside the review interval", dtype=object
-    )
+    threshold_triage_reason = np.full(len(out), "score is inside the review interval", dtype=object)
     threshold_triage_reason[~finite_score] = "review: anomaly score is unavailable"
-    threshold_triage_reason[threshold_band == "keep"] = (
-        f"threshold keep: score <= {policy.keep_max_score:.3f}"
-    )
+    threshold_triage_reason[threshold_band == "keep"] = f"threshold keep: score <= {policy.keep_max_score:.3f}"
     threshold_triage_reason[standard_exclude] = (
         f"threshold exclude: score >= {policy.exclude_min_score:.3f} and detector/guardrails agree"
     )
@@ -2504,9 +2204,7 @@ def apply_high_confidence_policy(
         "anatomical exclusion guardrails were not satisfied"
     )
 
-    review_resolution_reason = np.full(
-        len(out), "not applicable: stage-1 triage did not assign review", dtype=object
-    )
+    review_resolution_reason = np.full(len(out), "not applicable: stage-1 triage did not assign review", dtype=object)
     if adaptive_enabled:
         review_resolution_reason[review_queue & adaptive_exclude] = (
             "exclude after review fine screen: two-sided unprotected context, severe corroborated "
@@ -2517,10 +2215,7 @@ def apply_high_confidence_policy(
             failed: list[str] = []
             if not policy.enable_exclude:
                 failed.append("exclude direction disabled")
-            if (
-                not finite_score[index]
-                or score[index] < policy.adaptive_exclude_min_score
-            ):
+            if not finite_score[index] or score[index] < policy.adaptive_exclude_min_score:
                 failed.append("score below fine-screen floor")
             if multiscale_min_score[index] < policy.adaptive_exclude_min_score:
                 failed.append("minimum multi-window score below floor")
@@ -2539,9 +2234,8 @@ def apply_high_confidence_policy(
             if window_stability[index] < policy.adaptive_min_window_stability:
                 failed.append("3/5/7-window support not stable")
             action = "keep" if policy.unresolved_action == "keep" else "withhold"
-            review_resolution_reason[index] = (
-                f"{action} after review fine screen: "
-                + "; ".join(failed or ["exclusion gate not satisfied"])
+            review_resolution_reason[index] = f"{action} after review fine screen: " + "; ".join(
+                failed or ["exclusion gate not satisfied"]
             )
     else:
         action = "keep" if policy.unresolved_action == "keep" else "withhold"
@@ -2559,11 +2253,7 @@ def apply_high_confidence_policy(
     out["final_call"] = pd.Series(final_call, dtype="string")
     decision_basis = np.full(
         len(out),
-        (
-            "conservative_keep_default"
-            if policy.unresolved_action == "keep"
-            else "withheld"
-        ),
+        ("conservative_keep_default" if policy.unresolved_action == "keep" else "withheld"),
         dtype=object,
     )
     decision_basis[publish_keep | standard_exclude] = "independently_certified"
@@ -2609,27 +2299,19 @@ def write_high_confidence_outputs(
         ],
         errors="ignore",
     ).to_csv(calls_path, index=False)
-    applied.loc[applied["publication_status"].eq("withheld")].to_csv(
-        withheld_path, index=False
-    )
+    applied.loc[applied["publication_status"].eq("withheld")].to_csv(withheld_path, index=False)
     counts = applied["final_call"].value_counts(dropna=True).to_dict()
     certified = applied["decision_basis"].eq("independently_certified")
     adaptive_resolved = applied["decision_basis"].eq("adaptive_multidomain_resolution")
     review_resolved_keep = applied["decision_basis"].eq("review_resolved_keep")
-    operational_default = applied["decision_basis"].isin(
-        ["conservative_keep_default", "review_resolved_keep"]
-    )
+    operational_default = applied["decision_basis"].isin(["conservative_keep_default", "review_resolved_keep"])
     summary = {
         "schema_version": SCHEMA_VERSION,
         "policy": _jsonable(asdict(policy)),
         "n_slices": int(len(applied)),
         "published": int(applied["publication_status"].eq("published").sum()),
         "withheld": int(applied["publication_status"].eq("withheld").sum()),
-        "coverage": (
-            float(applied["publication_status"].eq("published").mean())
-            if len(applied)
-            else 0.0
-        ),
+        "coverage": (float(applied["publication_status"].eq("published").mean()) if len(applied) else 0.0),
         "keep": int(counts.get("keep", 0)),
         "exclude": int(counts.get("exclude", 0)),
         "certified": int(certified.sum()),
@@ -2637,11 +2319,7 @@ def write_high_confidence_outputs(
         "adaptive_exclude": int(applied["adaptive_exclusion_gate"].sum()),
         "adaptive_resolved": int(adaptive_resolved.sum()),
         "threshold_triage": {
-            key: int(value)
-            for key, value in applied["threshold_triage_call"]
-            .value_counts()
-            .to_dict()
-            .items()
+            key: int(value) for key, value in applied["threshold_triage_call"].value_counts().to_dict().items()
         },
         "review_resolved_keep": int(review_resolved_keep.sum()),
         "review_resolved_exclude": int(adaptive_resolved.sum()),
@@ -2664,9 +2342,7 @@ def write_high_confidence_outputs(
             "withheld_audit": withheld_path.name,
         },
     }
-    summary_path.write_text(
-        json.dumps(_jsonable(summary), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    summary_path.write_text(json.dumps(_jsonable(summary), indent=2, ensure_ascii=False), encoding="utf-8")
     return {
         "audit": str(audit_path),
         "calls": str(calls_path),
@@ -2721,9 +2397,7 @@ def write_slice_quality_outputs(
         "window_context",
         "reason",
     ]
-    result.metrics[
-        [column for column in call_columns if column in result.metrics]
-    ].to_csv(calls_path, index=False)
+    result.metrics[[column for column in call_columns if column in result.metrics]].to_csv(calls_path, index=False)
     template = result.metrics[["slice_index", "slice_id", "recommendation"]].copy()
     template["manual_label"] = "unreviewed"
     template["manual_reason"] = ""
@@ -2732,19 +2406,9 @@ def write_slice_quality_outputs(
     detector_policy = {
         "schema_version": SCHEMA_VERSION,
         "automatic_apply": False,
-        "keep_slices": result.metrics.loc[
-            result.metrics.recommendation == "keep", "slice_id"
-        ]
-        .astype(str)
-        .tolist(),
-        "review_slices": result.metrics.loc[
-            result.metrics.recommendation == "review", "slice_id"
-        ]
-        .astype(str)
-        .tolist(),
-        "exclude_candidate_slices": result.metrics.loc[
-            result.metrics.recommendation == "exclude", "slice_id"
-        ]
+        "keep_slices": result.metrics.loc[result.metrics.recommendation == "keep", "slice_id"].astype(str).tolist(),
+        "review_slices": result.metrics.loc[result.metrics.recommendation == "review", "slice_id"].astype(str).tolist(),
+        "exclude_candidate_slices": result.metrics.loc[result.metrics.recommendation == "exclude", "slice_id"]
         .astype(str)
         .tolist(),
         "note": (
@@ -2756,9 +2420,7 @@ def write_slice_quality_outputs(
         json.dumps(_jsonable(detector_policy), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    resolved_title = (
-        title or result.provenance.get("config", {}).get("report_title") or "Slice QC"
-    )
+    resolved_title = title or result.provenance.get("config", {}).get("report_title") or "Slice QC"
     output_names = {
         "metrics": metrics_path.name,
         "calls": calls_path.name,
@@ -2770,12 +2432,8 @@ def write_slice_quality_outputs(
     manifest = dict(result.provenance)
     manifest["outputs"] = output_names
     if ground_truth is not None:
-        manifest["ground_truth_evaluation"] = evaluate_slice_calls(
-            result.metrics, ground_truth
-        )
-    manifest_path.write_text(
-        json.dumps(_jsonable(manifest), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+        manifest["ground_truth_evaluation"] = evaluate_slice_calls(result.metrics, ground_truth)
+    manifest_path.write_text(json.dumps(_jsonable(manifest), indent=2, ensure_ascii=False), encoding="utf-8")
 
     if write_display_payload:
         display_payload_path.write_text(
@@ -2822,9 +2480,7 @@ def write_slice_quality_collection_outputs(
         dataset_id = str(raw_dataset_id).strip()
         relative = Path(dataset_id)
         if not dataset_id or relative.is_absolute() or ".." in relative.parts:
-            raise ValueError(
-                f"dataset id is not a safe relative output path: {dataset_id!r}"
-            )
+            raise ValueError(f"dataset id is not a safe relative output path: {dataset_id!r}")
         outputs[dataset_id] = write_slice_quality_outputs(
             result,
             root / relative,
