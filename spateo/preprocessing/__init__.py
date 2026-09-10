@@ -15,6 +15,7 @@ from .qc import (
 )
 from .slice_quality import (
     HighConfidencePolicy,
+    ReviewEvidenceTier,
     SliceQCConfig,
     SliceSeriesResult,
     add_multiscale_exclusion_evidence,
@@ -47,6 +48,7 @@ __all__ = [
     "SliceQCConfig",
     "SliceSeriesResult",
     "HighConfidencePolicy",
+    "ReviewEvidenceTier",
     "calculate_slice_quality",
     "scan_h5ad_series",
     "scan_h5ad_collection",

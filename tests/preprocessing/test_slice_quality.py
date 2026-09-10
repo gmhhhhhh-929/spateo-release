@@ -7,11 +7,13 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import pytest
 from scipy import sparse
 
 import spateo as st
 from spateo.preprocessing.slice_quality import (
     HighConfidencePolicy,
+    ReviewEvidenceTier,
     SliceQCConfig,
     _metric_anomaly,
     _score_metrics,
@@ -51,6 +53,7 @@ def make_series(seed: int = 7, prefix: str = "S") -> ad.AnnData:
 
 def test_public_preprocessing_exports() -> None:
     assert st.pp.SliceQCConfig is SliceQCConfig
+    assert st.pp.ReviewEvidenceTier is ReviewEvidenceTier
     assert st.pp.calculate_slice_quality is calculate_slice_quality
     assert st.pp.scan_h5ad_collection is scan_h5ad_collection
 
@@ -224,6 +227,163 @@ def test_two_stage_policy_resolves_only_stable_multidomain_review() -> None:
     assert applied.loc["stable", "final_call"] == "exclude"
     assert applied.loc["single-domain", "review_resolution"] == "keep"
     assert applied.loc["unstable", "final_call"] == "keep"
+
+
+def test_tiered_review_resolver_covers_the_full_review_interval() -> None:
+    rows = []
+    examples = [
+        ("low", 0.20, 4, 0.97),
+        ("mid", 0.45, 3, 0.92),
+        ("high", 0.65, 2, 0.87),
+        ("low-insufficient", 0.22, 3, 0.97),
+    ]
+    for slice_id, score, domains, maximum in examples:
+        details = [
+            {
+                "window": window,
+                "score": score,
+                "detector_call": "review",
+                "corroborating_domains": domains,
+                "maximum_domain_score": maximum,
+                "window_context": "two_sided",
+                "partial_structure_protection": False,
+            }
+            for window in (3, 5, 7)
+        ]
+        rows.append(
+            {
+                "slice_id": slice_id,
+                "quality_anomaly_score": score,
+                "recommendation": "review",
+                "window_context": "two_sided",
+                "partial_structure_protection": False,
+                "corroborating_domains": domains,
+                "score_confidence": 1.0,
+                "adaptive_window_details": json.dumps(details),
+                "density_domain_score": maximum,
+                "expression_domain_score": 0.80 if domains >= 2 else 0.0,
+                "damage_domain_score": 0.65 if domains >= 3 else 0.0,
+                "continuity_domain_score": 0.55 if domains >= 4 else 0.0,
+            }
+        )
+    policy = HighConfidencePolicy(
+        keep_max_score=0.129,
+        exclude_min_score=0.700,
+        review_exclusion_tiers=(
+            ReviewEvidenceTier("low", 0.129, 0.35, 4, 0.95, 1.0, 0.90, "candidate"),
+            ReviewEvidenceTier("mid", 0.35, 0.60, 3, 0.90, 1.0, 0.90, "candidate"),
+            ReviewEvidenceTier("high", 0.60, None, 2, 0.85, 1.0, 0.90, "candidate"),
+        ),
+        unresolved_action="keep",
+    )
+    applied = apply_high_confidence_policy(pd.DataFrame(rows), policy).set_index("slice_id")
+    assert applied.loc["low", "final_call"] == "exclude"
+    assert applied.loc["mid", "final_call"] == "exclude"
+    assert applied.loc["high", "final_call"] == "exclude"
+    assert applied.loc["low-insufficient", "final_call"] == "keep"
+    assert applied.loc["low", "review_resolution_tier"] == "low"
+    assert applied.loc["mid", "review_resolution_tier"] == "mid"
+    assert applied.loc["high", "review_resolution_tier"] == "high"
+
+
+def test_tiered_review_resolver_rejects_score_band_gaps() -> None:
+    policy = HighConfidencePolicy(
+        keep_max_score=0.129,
+        exclude_min_score=0.700,
+        review_exclusion_tiers=(
+            ReviewEvidenceTier("low", 0.129, 0.35, 4, 0.95),
+            ReviewEvidenceTier("high", 0.40, None, 2, 0.85),
+        ),
+        unresolved_action="keep",
+    )
+    metrics = pd.DataFrame(
+        {
+            "slice_id": ["S01"],
+            "quality_anomaly_score": [0.5],
+            "recommendation": ["review"],
+            "corroborating_domains": [2],
+            "score_confidence": [1.0],
+            "adaptive_window_details": ["[]"],
+            "density_domain_score": [0.9],
+            "expression_domain_score": [0.5],
+            "damage_domain_score": [0.0],
+            "continuity_domain_score": [0.0],
+        }
+    )
+    with pytest.raises(ValueError, match="contiguous score bands"):
+        apply_high_confidence_policy(metrics, policy)
+
+
+def test_tiered_review_resolver_rejects_weaker_low_score_evidence() -> None:
+    policy = HighConfidencePolicy(
+        keep_max_score=0.129,
+        exclude_min_score=0.700,
+        review_exclusion_tiers=(
+            ReviewEvidenceTier("low", 0.129, 0.40, 2, 0.85),
+            ReviewEvidenceTier("high", 0.40, None, 3, 0.90),
+        ),
+        unresolved_action="keep",
+    )
+    metrics = pd.DataFrame(
+        {
+            "slice_id": ["S01"],
+            "quality_anomaly_score": [0.5],
+            "recommendation": ["review"],
+            "corroborating_domains": [3],
+            "score_confidence": [1.0],
+            "adaptive_window_details": ["[]"],
+            "density_domain_score": [0.9],
+            "expression_domain_score": [0.8],
+            "damage_domain_score": [0.7],
+            "continuity_domain_score": [0.0],
+        }
+    )
+    with pytest.raises(ValueError, match="lower-score review tier"):
+        apply_high_confidence_policy(metrics, policy)
+
+
+def test_tiered_review_resolver_records_calibrated_keep_only_band() -> None:
+    details = [
+        {
+            "window": window,
+            "score": 0.30,
+            "detector_call": "review",
+            "corroborating_domains": 4,
+            "maximum_domain_score": 1.0,
+            "window_context": "two_sided",
+            "partial_structure_protection": False,
+        }
+        for window in (3, 5, 7)
+    ]
+    metrics = pd.DataFrame(
+        {
+            "slice_id": ["lower-review"],
+            "quality_anomaly_score": [0.30],
+            "recommendation": ["review"],
+            "window_context": ["two_sided"],
+            "partial_structure_protection": [False],
+            "corroborating_domains": [4],
+            "score_confidence": [1.0],
+            "adaptive_window_details": [json.dumps(details)],
+            "density_domain_score": [1.0],
+            "expression_domain_score": [1.0],
+            "damage_domain_score": [1.0],
+            "continuity_domain_score": [1.0],
+        }
+    )
+    policy = HighConfidencePolicy(
+        keep_max_score=0.129,
+        exclude_min_score=0.700,
+        review_exclusion_tiers=(
+            ReviewEvidenceTier("mid_low", 0.129, 0.54, enable_exclude=False),
+            ReviewEvidenceTier("high", 0.54, None, 2, 0.80),
+        ),
+        unresolved_action="keep",
+    )
+    applied = apply_high_confidence_policy(metrics, policy).iloc[0]
+    assert applied["final_call"] == "keep"
+    assert applied["review_resolution_tier"] == "mid_low"
+    assert "calibrated keep-only" in applied["review_resolution_reason"]
 
 
 def test_public_binary_output_hides_internal_review_fields() -> None:
