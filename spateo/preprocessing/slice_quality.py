@@ -85,6 +85,42 @@ class SliceSeriesResult:
     profile_genes: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ReviewEvidenceTier:
+    """One calibrated evidence route for resolving a stage-1 review slice.
+
+    Tiers partition the review score interval. Exclude-enabled lower-score
+    tiers require progressively stronger evidence. A calibrated interval with
+    no safe incremental exclusion rule can be declared keep-only by setting
+    ``enable_exclude=False``. Tiers are evaluated in declared order and never
+    bypass two-sided-context or anatomical-protection guardrails.
+    """
+
+    name: str
+    min_score: float
+    max_score: Optional[float] = None
+    min_corroborating_domains: int = 2
+    severe_domain_threshold: float = 0.85
+    min_window_stability: float = 1.0
+    min_score_confidence: float = 0.90
+    window_detector_mode: str = "candidate"
+    enable_exclude: bool = True
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ReviewEvidenceTier":
+        return cls(
+            name=str(value["name"]),
+            min_score=float(value["min_score"]),
+            max_score=(None if value.get("max_score") is None else float(value["max_score"])),
+            min_corroborating_domains=int(value.get("min_corroborating_domains", 2)),
+            severe_domain_threshold=float(value.get("severe_domain_threshold", 0.85)),
+            min_window_stability=float(value.get("min_window_stability", 1.0)),
+            min_score_confidence=float(value.get("min_score_confidence", 0.90)),
+            window_detector_mode=str(value.get("window_detector_mode", "candidate")),
+            enable_exclude=bool(value.get("enable_exclude", True)),
+        )
+
+
 @dataclass
 class HighConfidencePolicy:
     """Two-stage publication policy for binary keep/exclude outputs.
@@ -109,6 +145,7 @@ class HighConfidencePolicy:
     adaptive_severe_domain_threshold: float = 0.85
     adaptive_min_window_stability: float = 0.90
     adaptive_min_score_confidence: float = 0.90
+    review_exclusion_tiers: tuple[ReviewEvidenceTier, ...] = ()
     benchmark_summary: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -129,6 +166,9 @@ class HighConfidencePolicy:
             "adaptive_severe_domain_threshold": float(value.get("adaptive_severe_domain_threshold", 0.85)),
             "adaptive_min_window_stability": float(value.get("adaptive_min_window_stability", 0.90)),
             "adaptive_min_score_confidence": float(value.get("adaptive_min_score_confidence", 0.90)),
+            "review_exclusion_tiers": tuple(
+                ReviewEvidenceTier.from_mapping(item) for item in value.get("review_exclusion_tiers", ())
+            ),
             "benchmark_summary": dict(value.get("benchmark_summary", {})),
         }
         return cls(**fields)
@@ -1364,11 +1404,12 @@ def add_multiscale_exclusion_evidence(
     """Add auditable multi-window evidence for resolving near-boundary slices.
 
     The saved slice metric table is rescored independently at every requested
-    odd window width.  A window supports adaptive exclusion only when the
-    detector calls the slice ``exclude``, at least two evidence domains agree,
-    one domain is severe, two-sided context is available, and anatomical
-    partial-structure protection is inactive.  The original score and detector
-    call are not replaced.
+    odd window width. It stores the score, detector call, four domain scores,
+    context, and anatomical-protection state for every window. The legacy
+    ``supports_adaptive_exclusion`` flag still requires an ``exclude`` detector
+    call, but a calibrated tier may independently require candidate-level or
+    exclude-level detector support. The original score and detector call are
+    not replaced.
 
     This helper is deliberately separate from policy application so a future
     dataset- or technology-level calibration can lock the acceptable score and
@@ -1428,6 +1469,12 @@ def add_multiscale_exclusion_evidence(
                     "detector_call": str(scored.iloc[index]["recommendation"]),
                     "corroborating_domains": int(corroborating[index]),
                     "maximum_domain_score": float(max_domain[index]),
+                    "density_domain_score": float(domains.iloc[index]["density_domain_score"]),
+                    "expression_domain_score": float(domains.iloc[index]["expression_domain_score"]),
+                    "damage_domain_score": float(domains.iloc[index]["damage_domain_score"]),
+                    "continuity_domain_score": float(domains.iloc[index]["continuity_domain_score"]),
+                    "window_context": str(scored.iloc[index]["window_context"]),
+                    "partial_structure_protection": bool(scored.iloc[index]["partial_structure_protection"]),
                     "supports_adaptive_exclusion": bool(supported[index]),
                 }
             )
@@ -1998,6 +2045,149 @@ def evaluate_paired_simulation(
     return _jsonable(summary), paired.sort_values("slice_id", key=lambda series: series.map(_natural_key))
 
 
+def _validate_review_tiers(
+    tiers: Sequence[ReviewEvidenceTier],
+    keep_max_score: float,
+) -> None:
+    if tiers and abs(tiers[0].min_score - keep_max_score) > EPS:
+        raise ValueError("the first review evidence tier must start at keep_max_score")
+    names: set[str] = set()
+    previous_upper: Optional[float] = None
+    previous_tier: Optional[ReviewEvidenceTier] = None
+    detector_strength = {"ignore": 0, "candidate": 1, "exclude": 2}
+    for index, tier in enumerate(tiers):
+        if not tier.name or tier.name in names:
+            raise ValueError("review evidence tier names must be non-empty and unique")
+        names.add(tier.name)
+        if not keep_max_score <= tier.min_score <= 1:
+            raise ValueError("review evidence tier min_score must be between keep_max_score and 1")
+        if tier.max_score is not None and not tier.min_score < tier.max_score <= 1:
+            raise ValueError("review evidence tier max_score must be greater than min_score and at most 1")
+        if tier.min_corroborating_domains < 2 or tier.min_corroborating_domains > 4:
+            raise ValueError("review evidence tiers require between two and four corroborating domains")
+        for name, value in {
+            "severe_domain_threshold": tier.severe_domain_threshold,
+            "min_window_stability": tier.min_window_stability,
+            "min_score_confidence": tier.min_score_confidence,
+        }.items():
+            if not 0 <= value <= 1:
+                raise ValueError(f"review evidence tier {name} must be between 0 and 1")
+        if tier.window_detector_mode not in {"candidate", "exclude", "ignore"}:
+            raise ValueError("window_detector_mode must be candidate, exclude, or ignore")
+        if index > 0 and previous_upper is None:
+            raise ValueError("only the final review evidence tier may omit max_score")
+        if previous_upper is not None and abs(tier.min_score - previous_upper) > EPS:
+            raise ValueError("review evidence tiers must form contiguous score bands")
+        if previous_tier is not None:
+            if previous_tier.enable_exclude and not tier.enable_exclude:
+                raise ValueError("an exclude-enabled tier cannot precede a higher-score keep-only tier")
+            if not previous_tier.enable_exclude and not tier.enable_exclude:
+                raise ValueError("adjacent keep-only review tiers must be merged")
+            if previous_tier.enable_exclude:
+                lower_not_weaker = (
+                    previous_tier.min_corroborating_domains >= tier.min_corroborating_domains
+                    and previous_tier.severe_domain_threshold + EPS >= tier.severe_domain_threshold
+                    and previous_tier.min_window_stability + EPS >= tier.min_window_stability
+                    and previous_tier.min_score_confidence + EPS >= tier.min_score_confidence
+                    and detector_strength[previous_tier.window_detector_mode]
+                    >= detector_strength[tier.window_detector_mode]
+                )
+                lower_strictly_stronger = (
+                    previous_tier.min_corroborating_domains > tier.min_corroborating_domains
+                    or previous_tier.severe_domain_threshold > tier.severe_domain_threshold + EPS
+                    or previous_tier.min_window_stability > tier.min_window_stability + EPS
+                    or previous_tier.min_score_confidence > tier.min_score_confidence + EPS
+                    or detector_strength[previous_tier.window_detector_mode]
+                    > detector_strength[tier.window_detector_mode]
+                )
+                if not lower_not_weaker or not lower_strictly_stronger:
+                    raise ValueError(
+                        "each lower-score review tier must require strictly stronger evidence "
+                        "than the adjacent higher-score tier"
+                    )
+        previous_upper = tier.max_score
+        previous_tier = tier
+    if tiers and tiers[-1].max_score is not None:
+        raise ValueError("the final review evidence tier must have max_score=None")
+
+
+def _detector_mode_passes(call: str, mode: str, required: bool) -> bool:
+    if not required or mode == "ignore":
+        return True
+    if mode == "exclude":
+        return call == "exclude"
+    return call in {"review", "exclude"}
+
+
+def _evaluate_review_tier_row(
+    row: pd.Series,
+    tier: ReviewEvidenceTier,
+    *,
+    require_two_sided: bool,
+    require_detector_call: bool,
+) -> tuple[bool, float, list[str]]:
+    if not tier.enable_exclude:
+        return False, 0.0, ["calibrated keep-only score band"]
+    failed: list[str] = []
+    score = pd.to_numeric(pd.Series([row.get("quality_anomaly_score")]), errors="coerce").iloc[0]
+    if not np.isfinite(score) or float(score) < tier.min_score:
+        failed.append("score below tier floor")
+    if tier.max_score is not None and np.isfinite(score) and float(score) >= tier.max_score:
+        failed.append("score outside tier band")
+    call = str(row.get("recommendation", ""))
+    if not _detector_mode_passes(call, tier.window_detector_mode, require_detector_call):
+        failed.append("primary detector call does not support tier")
+    if require_two_sided and str(row.get("window_context", "")) != "two_sided":
+        failed.append("two-sided context unavailable")
+    if bool(row.get("partial_structure_protection", False)):
+        failed.append("partial/anatomical structure protection")
+    corroborating = pd.to_numeric(pd.Series([row.get("corroborating_domains")]), errors="coerce").iloc[0]
+    if not np.isfinite(corroborating) or int(corroborating) < tier.min_corroborating_domains:
+        failed.append("fewer than tier corroborating domains")
+    domain_values = pd.to_numeric(
+        pd.Series(
+            [
+                row.get("density_domain_score"),
+                row.get("expression_domain_score"),
+                row.get("damage_domain_score"),
+                row.get("continuity_domain_score"),
+            ]
+        ),
+        errors="coerce",
+    ).fillna(0.0)
+    if float(domain_values.max()) < tier.severe_domain_threshold:
+        failed.append("no domain reaches tier severity")
+    confidence = pd.to_numeric(pd.Series([row.get("score_confidence")]), errors="coerce").iloc[0]
+    if not np.isfinite(confidence) or float(confidence) < tier.min_score_confidence:
+        failed.append("insufficient score confidence")
+
+    try:
+        raw_details = row.get("adaptive_window_details", "[]")
+        details = json.loads(raw_details) if isinstance(raw_details, str) else list(raw_details)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        details = []
+    supported = 0
+    for detail in details:
+        window_score = pd.to_numeric(pd.Series([detail.get("score")]), errors="coerce").iloc[0]
+        window_ok = bool(np.isfinite(window_score) and float(window_score) >= tier.min_score)
+        window_ok &= _detector_mode_passes(
+            str(detail.get("detector_call", "")),
+            tier.window_detector_mode,
+            require_detector_call,
+        )
+        if require_two_sided:
+            window_ok &= str(detail.get("window_context", "")) == "two_sided"
+        window_ok &= not bool(detail.get("partial_structure_protection", False))
+        window_ok &= int(detail.get("corroborating_domains", 0)) >= tier.min_corroborating_domains
+        maximum_domain = pd.to_numeric(pd.Series([detail.get("maximum_domain_score")]), errors="coerce").iloc[0]
+        window_ok &= bool(np.isfinite(maximum_domain) and float(maximum_domain) >= tier.severe_domain_threshold)
+        supported += int(window_ok)
+    stability = supported / len(details) if details else 0.0
+    if stability + EPS < tier.min_window_stability:
+        failed.append("multi-window support below tier minimum")
+    return not failed, float(stability), failed
+
+
 def apply_high_confidence_policy(
     metrics: pd.DataFrame,
     policy: Union[HighConfidencePolicy, Mapping[str, Any]],
@@ -2027,8 +2217,23 @@ def apply_high_confidence_policy(
         raise ValueError("policy thresholds must satisfy 0 <= keep < exclude <= 1")
     if policy.unresolved_action not in {"withhold", "keep"}:
         raise ValueError("unresolved_action must be either 'withhold' or 'keep'")
-    adaptive_enabled = policy.adaptive_exclude_min_score is not None
-    if adaptive_enabled:
+    tiered_enabled = bool(policy.review_exclusion_tiers)
+    legacy_adaptive_enabled = policy.adaptive_exclude_min_score is not None
+    if tiered_enabled:
+        _validate_review_tiers(policy.review_exclusion_tiers, policy.keep_max_score)
+        tiered_required = {
+            "corroborating_domains",
+            "score_confidence",
+            "adaptive_window_details",
+            "density_domain_score",
+            "expression_domain_score",
+            "damage_domain_score",
+            "continuity_domain_score",
+        }
+        tiered_missing = tiered_required.difference(metrics.columns)
+        if tiered_missing:
+            raise KeyError("tiered review policy requires multi-window evidence columns: " f"{sorted(tiered_missing)}")
+    elif legacy_adaptive_enabled:
         assert policy.adaptive_exclude_min_score is not None
         if not 0 <= policy.adaptive_exclude_min_score < policy.exclude_min_score:
             raise ValueError("adaptive exclude threshold must be lower than the standard exclude threshold")
@@ -2088,7 +2293,39 @@ def apply_high_confidence_policy(
     threshold_triage_call[(threshold_band == "exclude") & ~standard_exclude] = "review"
     review_queue = threshold_triage_call == "review"
     adaptive_exclude = np.zeros(len(out), dtype=bool)
-    if adaptive_enabled:
+    matched_tier = np.full(len(out), "", dtype=object)
+    matched_tier_stability = np.zeros(len(out), dtype=float)
+    tier_diagnostics: list[list[dict[str, Any]]] = [[] for _ in range(len(out))]
+    if tiered_enabled:
+        for index in np.flatnonzero(review_queue):
+            row = out.iloc[index]
+            for tier in policy.review_exclusion_tiers:
+                passed, stability, failed = _evaluate_review_tier_row(
+                    row,
+                    tier,
+                    require_two_sided=policy.require_two_sided,
+                    require_detector_call=policy.require_detector_call,
+                )
+                tier_diagnostics[index].append(
+                    {
+                        "tier": tier.name,
+                        "passed": bool(passed),
+                        "window_stability": float(stability),
+                        "failed": failed,
+                    }
+                )
+                score_in_band = bool(
+                    finite_score[index]
+                    and score[index] >= tier.min_score
+                    and (tier.max_score is None or score[index] < tier.max_score)
+                )
+                if score_in_band:
+                    matched_tier[index] = tier.name
+                    matched_tier_stability[index] = stability
+                    adaptive_exclude[index] = bool(policy.enable_exclude and tier.enable_exclude and passed)
+                    break
+        adaptive_exclude &= ~standard_exclude
+    elif legacy_adaptive_enabled:
         assert policy.adaptive_exclude_min_score is not None
         domain_values = (
             out[
@@ -2157,7 +2394,17 @@ def apply_high_confidence_policy(
         0,
         1,
     )
-    if adaptive_enabled and np.any(adaptive_exclude):
+    if tiered_enabled and np.any(adaptive_exclude):
+        primary_confidence = (
+            pd.to_numeric(out.loc[adaptive_exclude, "score_confidence"], errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)
+        )
+        confidence[adaptive_exclude] = np.minimum(
+            matched_tier_stability[adaptive_exclude],
+            primary_confidence,
+        )
+    elif legacy_adaptive_enabled and np.any(adaptive_exclude):
         assert policy.adaptive_exclude_min_score is not None
         confidence[adaptive_exclude] = np.minimum(
             pd.to_numeric(out.loc[adaptive_exclude, "adaptive_window_stability"], errors="coerce")
@@ -2191,6 +2438,12 @@ def apply_high_confidence_policy(
         "published exclude: near-boundary score resolved by severe corroborated multi-domain evidence "
         "stable across slice-window scales"
     )
+    if tiered_enabled:
+        for index in np.flatnonzero(adaptive_exclude):
+            reasons[index] = (
+                "published exclude: calibrated review tier "
+                f"{matched_tier[index]} passed its multi-domain and multi-window evidence gate"
+            )
 
     threshold_triage_reason = np.full(len(out), "score is inside the review interval", dtype=object)
     threshold_triage_reason[~finite_score] = "review: anomaly score is unavailable"
@@ -2205,7 +2458,25 @@ def apply_high_confidence_policy(
     )
 
     review_resolution_reason = np.full(len(out), "not applicable: stage-1 triage did not assign review", dtype=object)
-    if adaptive_enabled:
+    if tiered_enabled:
+        for index in np.flatnonzero(review_queue):
+            tier_name = str(matched_tier[index]) or "unmatched"
+            selected = next(
+                (item for item in tier_diagnostics[index] if item["tier"] == tier_name),
+                None,
+            )
+            if adaptive_exclude[index]:
+                review_resolution_reason[index] = (
+                    f"exclude after review fine screen: calibrated tier {tier_name} passed "
+                    "its score-band, multi-domain, multi-window, context, and protection checks"
+                )
+            else:
+                action = "keep" if policy.unresolved_action == "keep" else "withhold"
+                failures = selected["failed"] if selected is not None else ["no calibrated tier matched"]
+                review_resolution_reason[index] = f"{action} after review fine screen ({tier_name}): " + "; ".join(
+                    failures or ["exclusion gate not satisfied"]
+                )
+    elif legacy_adaptive_enabled:
         review_resolution_reason[review_queue & adaptive_exclude] = (
             "exclude after review fine screen: two-sided unprotected context, severe corroborated "
             "multi-domain evidence, and stable 3/5/7-window support"
@@ -2249,6 +2520,11 @@ def apply_high_confidence_policy(
     out["threshold_triage_reason"] = threshold_triage_reason
     out["review_resolution"] = pd.Series(review_resolution, dtype="string")
     out["review_resolution_reason"] = review_resolution_reason
+    out["review_resolution_tier"] = pd.Series(matched_tier, dtype="string")
+    out["review_tier_window_stability"] = matched_tier_stability
+    out["review_tier_diagnostics"] = [
+        json.dumps(items, ensure_ascii=False, separators=(",", ":")) for items in tier_diagnostics
+    ]
     out["certified_call"] = pd.Series(certified_call, dtype="string")
     out["final_call"] = pd.Series(final_call, dtype="string")
     decision_basis = np.full(
@@ -2259,7 +2535,9 @@ def apply_high_confidence_policy(
     decision_basis[publish_keep | standard_exclude] = "independently_certified"
     if policy.unresolved_action == "keep":
         decision_basis[review_queue & ~adaptive_exclude] = "review_resolved_keep"
-    decision_basis[adaptive_exclude] = "adaptive_multidomain_resolution"
+    decision_basis[adaptive_exclude] = (
+        "tiered_multidomain_resolution" if tiered_enabled else "adaptive_multidomain_resolution"
+    )
     out["decision_basis"] = decision_basis
     out["standard_exclusion_gate"] = standard_exclude
     out["adaptive_exclusion_gate"] = adaptive_exclude
@@ -2296,13 +2574,18 @@ def write_high_confidence_outputs(
             "threshold_triage_reason",
             "review_resolution",
             "review_resolution_reason",
+            "review_resolution_tier",
+            "review_tier_window_stability",
+            "review_tier_diagnostics",
         ],
         errors="ignore",
     ).to_csv(calls_path, index=False)
     applied.loc[applied["publication_status"].eq("withheld")].to_csv(withheld_path, index=False)
     counts = applied["final_call"].value_counts(dropna=True).to_dict()
     certified = applied["decision_basis"].eq("independently_certified")
-    adaptive_resolved = applied["decision_basis"].eq("adaptive_multidomain_resolution")
+    adaptive_resolved = applied["decision_basis"].isin(
+        ["adaptive_multidomain_resolution", "tiered_multidomain_resolution"]
+    )
     review_resolved_keep = applied["decision_basis"].eq("review_resolved_keep")
     operational_default = applied["decision_basis"].isin(["conservative_keep_default", "review_resolved_keep"])
     summary = {

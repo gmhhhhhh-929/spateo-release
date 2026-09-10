@@ -137,6 +137,38 @@ def _run_slice_quality_smoke_test() -> dict[str, object]:
     if not np.array_equal(adata.obsm["spatial"], original_coordinates):
         raise RuntimeError("Slice-QC modified source coordinates.")
 
+    multiscale = st.pp.add_multiscale_exclusion_evidence(
+        metrics,
+        config=config,
+        windows=(3, 5),
+        minimum_corroborating_domains=2,
+        severe_domain_threshold=0.85,
+    )
+    keep_only_tier = st.pp.ReviewEvidenceTier.from_mapping(
+        {
+            "name": "low_keep_only",
+            "min_score": 0.10,
+            "max_score": 0.40,
+            "enable_exclude": False,
+        }
+    )
+    if keep_only_tier.enable_exclude:
+        raise RuntimeError("Slice-QC did not preserve an explicit keep-only calibrated score band.")
+    binary = st.pp.apply_high_confidence_policy(
+        multiscale,
+        st.pp.HighConfidencePolicy(
+            keep_max_score=0.10,
+            exclude_min_score=0.80,
+            unresolved_action="keep",
+            review_exclusion_tiers=(
+                keep_only_tier,
+                st.pp.ReviewEvidenceTier("high", 0.40, None, 2, 0.85, 1.0, 0.90, "candidate"),
+            ),
+        ),
+    )
+    if set(binary["final_call"]) - {"keep", "exclude"}:
+        raise RuntimeError("Slice-QC tiered review resolver did not return binary actions.")
+
     simulated = st.pp.simulate_slice_quality_artifacts(
         adata,
         [{"slice_id": "S02", "kind": "depth", "rate": 0.2}],
@@ -176,6 +208,8 @@ def _run_slice_quality_smoke_test() -> dict[str, object]:
         "simulation_layer": "slice_qc_simulated_counts",
         "independent_datasets": list(collection),
         "source_coordinates_unchanged": True,
+        "keep_only_score_band_supported": True,
+        "tiered_binary_actions": {str(key): int(value) for key, value in binary["final_call"].value_counts().items()},
     }
 
 
@@ -327,6 +361,7 @@ def main() -> int:
             "pp.scan_h5ad_series",
             "pp.scan_h5ad_collection",
             "pp.apply_high_confidence_policy",
+            "pp.ReviewEvidenceTier",
             "pp.write_slice_quality_outputs",
         ):
             current = st

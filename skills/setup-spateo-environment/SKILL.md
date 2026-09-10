@@ -54,8 +54,10 @@ Create a separate environment by default. Preserve the user's current environmen
 
    The default smoke test now covers ordinary IO/preprocessing plus the
    serial-slice QC API, including an in-memory dataset, controlled expression
-   thinning, and two independent file-backed datasets. Use the narrower check
-   when only the newly added QC surface needs verification:
+   thinning, two independent file-backed datasets, 3/5-window evidence, the
+   contiguous tiered review resolver, and explicit calibrated keep-only score
+   bands. Use the narrower check when only the
+   newly added QC surface needs verification:
 
    ```bash
    python skills/setup-spateo-environment/scripts/verify_environment.py \
@@ -67,9 +69,19 @@ Create a separate environment by default. Preserve the user's current environmen
 8. Run focused tests before the full suite:
 
    ```bash
-   python -m pytest -q tests/io tests/preprocessing
-   python -m pytest -q
+   MPLCONFIGDIR=/tmp/spateo-matplotlib-cache \
+   NUMBA_CACHE_DIR=/tmp/spateo-numba-cache \
+   XDG_CACHE_HOME=/tmp/spateo-xdg-cache \
+     python -m pytest -q tests/io tests/preprocessing
+   MPLCONFIGDIR=/tmp/spateo-matplotlib-cache \
+   NUMBA_CACHE_DIR=/tmp/spateo-numba-cache \
+   XDG_CACHE_HOME=/tmp/spateo-xdg-cache \
+     python -m pytest -q
    ```
+
+   Explicit writable cache paths avoid UMAP/Numba collection failures on
+   sandboxed macOS sessions and read-only home mounts; they do not change test
+   calculations.
 
 9. Report the Python executable, resolved core versions, verifier result,
    slice-QC smoke-test result, test counts, installed Codex skill locations,

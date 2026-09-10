@@ -10,4 +10,5 @@ cell_segmentation
 digitization
 spatial_io_preprocessing
 serial_slice_quality_control
+serial_slice_quality_threshold_calibration
 ```

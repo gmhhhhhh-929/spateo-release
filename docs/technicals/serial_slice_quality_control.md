@@ -56,14 +56,38 @@ uses two additional stages:
    `threshold_band`. Detector agreement, two-sided context and partial-structure
    protection can downgrade an unsafe high-score exclusion into the internal
    review queue.
-2. **Review fine screen:** only review rows are tested for multi-domain
-   corroboration, one severe domain, adequate score confidence and stable
-   support across the configured 3/5/7-slice windows. Every condition must pass
-   for exclusion; otherwise the complete operational action is keep.
+2. **Review fine screen:** contiguous calibrated score bands cover the complete
+   review interval, so every review row is evaluated. A band is exclude-enabled
+   only when calibration shows positive safe detection gain; unsupported lower
+   scores form an explicit keep-only band. Enabled lower-score rules require
+   stricter evidence and retain two-sided-context, anatomical-protection,
+   confidence and 3/5/7-window-stability gates. Every enabled condition must
+   pass for exclusion; otherwise the complete operational action is keep.
 
 The public calls contain only `keep / exclude`. The binary audit preserves the
 threshold band, guarded triage, review resolution, failed conditions and final
 decision basis.
+
+A frozen policy represents the fine screen explicitly:
+
+```python
+policy = st.pp.HighConfidencePolicy(
+    keep_max_score=K,
+    exclude_min_score=E,
+    unresolved_action="keep",
+    review_exclusion_tiers=(
+        st.pp.ReviewEvidenceTier("lower_keep_only", K, H, enable_exclude=False),
+        st.pp.ReviewEvidenceTier("high", H, None, 2, 0.85, 1.0, 0.90),
+    ),
+)
+```
+
+`K`, `H`, `E` and the evidence requirements are placeholders here. A
+released policy must load values selected on a declared calibration pool and
+then pass an unchanged evaluation on unseen datasets; they are not API
+defaults. The tier intervals must be contiguous beginning at `K`. A keep-only
+band is valid only when calibration found no safe positive-gain exclusion rule
+for that interval.
 
 ## Minimal API examples
 
