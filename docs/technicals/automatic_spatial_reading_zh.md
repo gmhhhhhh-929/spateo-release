@@ -4,7 +4,7 @@
 
 新增公开入口 `st.io.read_spatial(path)`。正常调用只需要输入路径，不需要设置匹配分数、最低分数或严格模式。内部不再使用旧自动检测器的固定评分、候选评分排序和近似并列分差。
 
-原有 `read_auto_spatial`、`read_spatial_auto`、`detect_spatial_technology`、`detect_spatial_technologies` 及各平台直接 reader 保持原有行为。已有脚本不会因为本次修改突然改变返回类型或阈值含义。新入口是增量功能，不是把旧入口的默认分数改高或把所有候选设成满分。
+旧评分策略已删除：不再保留固定分数、排名、分差判定和阈值检测器。`read_auto_spatial`、`read_spatial_auto` 现在都是 `read_spatial` 的别名，三个入口均返回 `SpatialReadResult`，不再直接返回 AnnData 或 `(adata, match)`。旧参数 `min_confidence`、`strict`、`return_match` 已删除；旧检测函数和 `SpatialReadMatch` 已删除。仅发现而暂不读取时使用 `read_spatial(path, load=False)`。各平台直接 reader 不变。这是明确的 API 迁移，已有脚本应按第 12 节修改。
 
 ## 2. 最简单的用法
 
@@ -185,11 +185,10 @@ make check
 
 ## 12. 如何迁移已有脚本
 
-旧脚本可以继续运行。如果希望使用新行为，将单输入场景改为：
+依赖旧自动入口返回值或检测函数的脚本需要迁移。单输入场景改为：
 
 ```python
-# 旧入口仍有效
-# adata = st.io.read_auto_spatial(path)
+# 两个旧读取名称也返回 result；推荐统一使用 read_spatial
 
 result = st.io.read_spatial(path)
 if result.status != "ok":
@@ -202,3 +201,13 @@ adata = result.adata
 
 
 跨平台验证已扩展到 11 类格式、550 个案例、1,650 次调用；另有 7 类本地真实来源输入核验。完整轮次、分母、初始失败及真实数据缺口见[全技术测试报告](automatic_spatial_reading_benchmark_zh.md)。
+
+## 13. 删除旧评分策略后的重新验证（2026-09-20）
+
+- `pytest tests/io`：70 项通过，1 项因未设置真实输入路径跳过；随后指定之前的真实小鼠脑 Visium 原始文件目录，单独运行该项并通过。合计 71 项通过，无未解决的跳过。
+- 再次执行 `scripts/benchmark_automatic_spatial_reading.py --rounds 10 --repeats 3`：11 类格式 × 10 轮 × 5 类场景 = 550 个独立合成案例，每案例重复 3 次，共 1,650 次调用。
+- 220 个有效案例全部识别正确、读取成功，矩阵值、标识符和坐标核验通过；330 个无效案例全部正确拒绝；550 个案例重复结果一致。
+- 这是已构造格式案例的通过率，不是所有真实平台数据的总体准确率。真实 Visium 核验使用公开原始 H5 和位置表，未使用已有 H5AD 作为输入。
+- 机器可读汇总见 [删除评分策略后的验证记录](automatic_spatial_score_removal_validation.json)。记录中的基础提交是本次修改前的 HEAD，`working_tree_dirty=true` 表示测试针对待提交修改运行。
+
+删除内容包括旧检测器、固定分值、候选排名、近似并列分差和置信阈值，以及旧结果类型。为避免记录误导，重新写入 IO 来源信息时会清除已有 `confidence` 字段；磁盘上已有 H5AD 文件不会被自动修改。

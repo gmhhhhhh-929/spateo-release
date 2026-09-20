@@ -13,7 +13,6 @@ from PIL import Image
 from scipy import sparse
 
 from spateo.io import SpatialReadResult, read_spatial
-from spateo.io.spatial.auto import detect_spatial_technology
 
 
 def matrix(path, ids=("c1", "c2"), values=None):
@@ -178,7 +177,6 @@ def test_empty_file_names_do_not_pass_contract(tmp_path):
     (tmp_path / "spatial").mkdir()
     (tmp_path / "filtered_feature_bc_matrix.h5").touch()
     (tmp_path / "spatial/tissue_positions.csv").touch()
-    assert detect_spatial_technology(tmp_path).technology == "visium"  # Legacy remains compatible.
     result = read_spatial(tmp_path)
     assert result.status == "failed"
     assert next(iter(result.datasets.values())).adata is None
@@ -292,11 +290,11 @@ def test_companion_conflict_is_not_broken_by_file_order(tmp_path):
     assert r.status == "failed" and next(iter(r.datasets.values())).status == "unresolved"
 
 
-def test_score_changes_do_not_affect_new_pipeline(tmp_path, monkeypatch):
-    import spateo.io.spatial.auto as legacy
+def test_score_ranker_has_been_removed(tmp_path):
+    import spateo.io.spatial.auto as automatic
 
     visium(tmp_path)
-    monkeypatch.setattr(legacy, "_rank_matches", lambda *_: (_ for _ in ()).throw(AssertionError("score ranking used")))
+    assert not hasattr(automatic, "_rank_matches")
     assert read_spatial(tmp_path).status == "ok"
 
 

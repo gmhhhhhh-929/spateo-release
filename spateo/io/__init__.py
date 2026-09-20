@@ -9,10 +9,7 @@ from . import general, single, spatial
 from .general import load, read_csv, save
 from .single import read, read_10x_h5, read_10x_mtx, read_h5ad
 from .spatial import (
-    SpatialReadMatch,
     alpha_shape,
-    detect_spatial_technologies,
-    detect_spatial_technology,
     get_concave_hull,
     read_atera,
     read_auto_spatial,
@@ -53,9 +50,6 @@ __all__ = [
     "load",
     "read_auto_spatial",
     "read_spatial_auto",
-    "detect_spatial_technology",
-    "detect_spatial_technologies",
-    "SpatialReadMatch",
     "spatial_file_manifest",
     "read_atera",
     "read_xenium",

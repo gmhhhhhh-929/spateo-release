@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
-from . import _canonical_technologies, _merfish_group, _normalize_token, _seqfish_role
+from ._formats import _canonical_technologies, _merfish_group, _normalize_token, _seqfish_role
 
 _TABLE_SUFFIXES = (".csv", ".csv.gz", ".tsv", ".tsv.gz", ".txt", ".txt.gz", ".parquet")
 _SKIP_DIRS = {".git", "analysis", "images", "morphology_focus", "CellComposite", "CellLabels", "cell_boundaries"}

@@ -32,9 +32,6 @@ from ._visium_hd import (
 )
 from ._xenium import read_xenium
 from .auto import (
-    SpatialReadMatch,
-    detect_spatial_technologies,
-    detect_spatial_technology,
     read_auto_spatial,
     read_spatial_auto,
 )
@@ -75,9 +72,6 @@ __all__ = [
     "in_convex_hull",
     "bin_matrix",
     "get_coords_labels",
-    "SpatialReadMatch",
-    "detect_spatial_technologies",
-    "detect_spatial_technology",
     "read_auto_spatial",
     "read_spatial_auto",
     "spatial_file_manifest",

@@ -160,7 +160,7 @@ def _library_id(metadata: dict[str, Any], root: Path, requested: Optional[str]) 
         "adata = st.io.read_visium('/path/to/pipestance', load_images=False)",
         "adata = st.io.read_visium('/path/to/outs', load_qc_images=True)",
     ],
-    related=["io.spatial.read_visium_hd", "io.single.read_10x_h5", "io.spatial.read_auto_spatial"],
+    related=["io.spatial.read_visium_hd", "io.single.read_10x_h5", "io.spatial.read_spatial"],
 )
 def read_visium(
     path: Union[str, "PathLike[str]"],

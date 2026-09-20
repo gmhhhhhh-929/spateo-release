@@ -12,7 +12,7 @@ from PIL import Image
 from scipy import sparse
 
 from spateo.io import read_atera, read_visium
-from spateo.io.spatial.auto import detect_spatial_technology
+from spateo.io.spatial.auto import read_spatial
 
 
 def _write_10x_h5(path: Path, counts: np.ndarray, barcodes: list[str], genes: list[str]) -> None:
@@ -65,7 +65,10 @@ class TestAteraIO(TestCase):
             (focus / "ch0000_dapi.ome.tif").touch()
             (focus / "ch0001_atp1a1_cd45.ome.tif").touch()
 
-            match = detect_spatial_technology(root)
+            result = read_spatial(root, load=False)
+            self.assertEqual(1, len(result.datasets))
+            match = next(iter(result.datasets.values()))
+            self.assertEqual("deferred", match.status)
             cache_path = root / "atera-cache.h5ad"
             adata = read_atera(
                 root,

@@ -1,6 +1,6 @@
 # Spatial IO and preprocessing
 
-For the new score-free, contract-based input API, see [automatic spatial reading](automatic_spatial_reading.md). The legacy automatic reader below remains compatible.
+For the new score-free, contract-based input API, see [automatic spatial reading](automatic_spatial_reading.md). All automatic reader names now return `SpatialReadResult`; the old scored detector API has been removed.
 
 ## Unified public interfaces
 
@@ -9,7 +9,8 @@ The maintained implementations now live directly under `spateo.io` and `spateo.p
 ```python
 import spateo as st
 
-adata = st.io.read_auto_spatial("/path/to/dataset")
+result = st.io.read_spatial("/path/to/dataset")
+adata = result.adata
 st.pp.preprocess_spatial(adata, recipe="auto")
 ```
 

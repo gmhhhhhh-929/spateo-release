@@ -83,7 +83,6 @@ def record_spatial_io(
     technology: str,
     source: PathLike,
     reader: str,
-    confidence: Optional[float] = None,
     evidence: tuple[str, ...] = (),
     reader_kwargs: Optional[Mapping[str, Any]] = None,
     manifest: Optional[dict[str, Any]] = None,
@@ -103,8 +102,7 @@ def record_spatial_io(
             "manifest": manifest or spatial_file_manifest(source_path),
         }
     )
-    if confidence is not None:
-        current["confidence"] = float(confidence)
+    current.pop("confidence", None)  # Do not retain obsolete detector scores.
     adata.uns["spateo_io"] = current
 
 

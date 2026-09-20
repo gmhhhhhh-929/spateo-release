@@ -14,7 +14,7 @@ from PIL import Image
 
 from ...._registry import register_function
 from .._provenance import record_spatial_io
-from . import _canonical_technologies
+from ._formats import _canonical_technologies
 from ._contracts import ContractError, ResourceDeferred, probe, read_core
 from ._discovery import discover, inventory
 from ._result import POLICY_VERSION, SpatialDataset, SpatialReadResult
@@ -219,7 +219,7 @@ def _load(entry, candidate, result, files, budget, load_images, reason, signatur
 
 
 @register_function(
-    aliases=["read_spatial", "automatic spatial reading without thresholds"],
+    aliases=["read_spatial", "read_auto_spatial", "read_spatial_auto", "automatic spatial reading without thresholds"],
     category="io",
     description="Discover spatial inputs, validate core format contracts and return named results without score thresholds.",
     prerequisites={},
@@ -227,7 +227,7 @@ def _load(entry, candidate, result, files, budget, load_images, reason, signatur
     produces={},
     auto_fix="none",
     examples=["result = st.io.read_spatial('dataset_dir')", "adata = result.adata", "print(result.report)"],
-    related=["io.read_auto_spatial", "io.read_visium"],
+    related=["io.read_visium", "io.read_slideseq"],
 )
 def read_spatial(
     path: Union[str, Path],
@@ -243,8 +243,9 @@ def read_spatial(
 
     A path is the only required argument. All discovered samples/representations
     are retained as named entries; no matrix is selected by a platform score.
-    Core-format or ID failures stay visible in ``result.report``. Existing
-    ``read_auto_spatial`` and platform readers retain their legacy behavior.
+    Core-format or ID failures stay visible in ``result.report``.
+    ``read_auto_spatial`` and ``read_spatial_auto`` are aliases of this function
+    and also return ``SpatialReadResult``. Direct platform readers are unchanged.
 
     Parameters beyond ``path`` are optional: ``technology`` restricts discovery;
     ``load=False`` discovers/probes but defers content loading. Memory, inventory

@@ -24,7 +24,7 @@ git diff --check
 Synthetic fixtures cover each supported core technology, incomplete and corrupt
 inputs, invalid expression values, identifier mismatches, multiple samples and
 representations, deferred loads, optional image failures, bounded discovery and
-source changes. A guard test makes the legacy score ranker raise if invoked by
+source changes. The original validation used a guard that made the legacy score ranker raise if invoked by
 the new entry point. Small fixtures do not establish support for every vendor
 export version.
 
@@ -66,3 +66,8 @@ not a calibrated detector accuracy estimate or validation of all platforms on
 real data.
 
 Cross-platform expansion: see the [complete benchmark report](automatic_spatial_reading_benchmark_zh.md) for 11 format categories, synthetic positive/negative cases, seven real-source categories and retained initial failures.
+
+
+## Removal of the former scoring API
+
+The score ranker and detector APIs have since been deleted. Regression coverage now verifies that the retired exports are absent, all three automatic reader names share one implementation and return type, obsolete keyword arguments fail explicitly, and discovery can be followed by a complete validated read. Historical benchmark figures above describe their original run; they are not a new accuracy estimate.

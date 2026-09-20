@@ -217,7 +217,7 @@ def _match_cell_metadata(adata: AnnData, cells: pd.DataFrame) -> tuple[AnnData, 
         "adata = st.io.read_atera('/path/to/extracted/outs')",
         "adata = st.io.read_atera('/path/to/outs', image_key='boundary', load_boundaries=False)",
     ],
-    related=["io.spatial.read_xenium", "io.spatial.read_auto_spatial"],
+    related=["io.spatial.read_xenium", "io.spatial.read_spatial"],
 )
 def read_atera(
     path: PathLike,

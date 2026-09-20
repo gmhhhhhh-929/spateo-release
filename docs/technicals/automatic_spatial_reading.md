@@ -1,9 +1,14 @@
 # Automatic spatial reading without score thresholds
 
-`st.io.read_spatial(path)` is the new, additive contract-based spatial input API.
-It does not call the legacy score ranker and has no `min_confidence` or `strict`
-argument. Existing `read_auto_spatial`, `read_spatial_auto`, detector APIs and
-platform readers retain their original behavior and return types.
+`st.io.read_spatial(path)` is the contract-based spatial input API.
+The previous score ranker, fixed confidence values and threshold-based detectors
+have been removed. `read_auto_spatial` and `read_spatial_auto` are direct aliases
+of `read_spatial`: **all three return `SpatialReadResult`, not AnnData or a
+`(adata, match)` tuple**. Use `result.adata` for a single ready dataset.
+`min_confidence`, `strict` and `return_match` are no longer accepted.
+`SpatialReadMatch`, `detect_spatial_technology` and `detect_spatial_technologies`
+have been removed; use `read_spatial(path, load=False)` and inspect
+`result.datasets` / `result.report` for discovery. Direct platform readers are unchanged.
 
 For the detailed Chinese implementation report, see
 [自动空间数据读取：完整说明](automatic_spatial_reading_zh.md).
