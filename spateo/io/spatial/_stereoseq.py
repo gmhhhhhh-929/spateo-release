@@ -213,14 +213,15 @@ def read_bgi_as_dataframe(
 
     dtype = {
         "geneID": "category",
-        "x": np.uint32,
-        "y": np.uint32,
-        "MIDCounts": np.uint16,
-        "MIDCount": np.uint16,
-        "UMICount": np.uint16,
-        "UMICounts": np.uint16,
-        "EXONIC": np.uint16,
-        "INTRONIC": np.uint16,
+        "x": np.int64,
+        "y": np.int64,
+        "MIDCounts": np.int64,
+        "MIDCount": np.int64,
+        "UMICount": np.int64,
+        "UMICounts": np.int64,
+        "EXONIC": np.int64,
+        "INTRONIC": np.int64,
+        "ExonCount": np.int64,
     }
     rename = {
         "MIDCounts": "total",
@@ -256,7 +257,37 @@ def read_bgi_as_dataframe(
             "Expected at least geneID, x, y, and one total-count column."
         )
 
+    from .auto._stereo import _integers
+
+    for column in ("x", "y", "total", "spliced", "unspliced", "ExonCount"):
+        if column in df:
+            df[column] = _integers(df[column], column)
+    if sum(map(int, df["total"])) > np.iinfo(np.int64).max:
+        raise ValueError("Aggregated molecule count exceeds int64 range")
+    for column in ("spliced", "unspliced", "ExonCount"):
+        if column in df and (df[column] > df["total"]).any():
+            raise ValueError(f"{column} exceeds total counts")
     return df
+
+
+def read_stereoseq(path, *, bin_size=None, chemistry=None, load_images=True, max_memory_bytes=1024**3):
+    """Read one native Stereo-seq GEM/GEF as AnnData (V1 or V2 chemistry).
+
+    No gene filtering, normalization or segmentation is performed. ``chemistry``
+    is optional provenance supplied by the caller, not a matching threshold.
+    Use ``read_spatial`` for collections or to inspect deferred/failed entries.
+    Legacy ``read_bgi`` segmentation workflows remain available.
+    """
+    from .auto._automatic import read_spatial
+
+    return read_spatial(
+        path,
+        technology="stereoseq",
+        load_images=load_images,
+        max_memory_bytes=max_memory_bytes,
+        stereoseq_bin_size=bin_size,
+        stereoseq_chemistry=chemistry,
+    ).adata
 
 
 def dataframe_to_labels(
@@ -442,19 +473,21 @@ def read_bgi_agg(
             layers[SKM.LABELS_LAYER_KEY] = labels[::binsize, ::binsize]
 
     _progress("Constructing count matrices")
-    X = csr_matrix((data["total"].values, (x, y)), shape=shape, dtype=np.uint16)
+    X = csr_matrix((data["total"].values, (x, y)), shape=shape, dtype=np.int64)
+    if "ExonCount" in data.columns:
+        layers["exon"] = csr_matrix((data["ExonCount"].values, (x, y)), shape=shape, dtype=np.int64)
 
     if "spliced" in data.columns:
         layers[SKM.SPLICED_LAYER_KEY] = csr_matrix(
             (data["spliced"].values, (x, y)),
             shape=shape,
-            dtype=np.uint16,
+            dtype=np.int64,
         )
     if "unspliced" in data.columns:
         layers[SKM.UNSPLICED_LAYER_KEY] = csr_matrix(
             (data["unspliced"].values, (x, y)),
             shape=shape,
-            dtype=np.uint16,
+            dtype=np.int64,
         )
 
     if gene_agg:
@@ -465,7 +498,7 @@ def read_bgi_agg(
             layers[layer_name] = csr_matrix(
                 (subset["total"].values, (subset["x"].values, subset["y"].values)),
                 shape=shape,
-                dtype=np.uint16,
+                dtype=np.int64,
             )
 
     adata = AnnData(X=X, layers=layers)[x_min:, y_min:].copy()
@@ -647,9 +680,16 @@ def read_bgi(
         layers[SKM.SPLICED_LAYER_KEY] = csr_matrix((data["spliced"].values, (x_ind, y_ind)), shape=shape)
     if "unspliced" in data.columns:
         layers[SKM.UNSPLICED_LAYER_KEY] = csr_matrix((data["unspliced"].values, (x_ind, y_ind)), shape=shape)
+    if "ExonCount" in data.columns:
+        layers["exon"] = csr_matrix((data["ExonCount"].values, (x_ind, y_ind)), shape=shape)
 
     obs = pd.DataFrame(index=pd.Index(uniq_cell, dtype="object"))
     var = pd.DataFrame(index=pd.Index(uniq_gene, dtype="object"))
+    if "geneName" in data.columns:
+        symbols = data[["geneID", "geneName"]].drop_duplicates()
+        if symbols["geneID"].duplicated().any():
+            raise ValueError("Conflicting geneName for a geneID")
+        var["gene_name"] = symbols.set_index("geneID")["geneName"].reindex(var.index).values
     adata = AnnData(X=X, obs=obs, var=var, layers=layers)
 
     # Set spateo keys

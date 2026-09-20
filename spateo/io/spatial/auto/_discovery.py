@@ -249,7 +249,7 @@ def discover(files: List[Path], requested: Path, technology=None):
                 for meta in _one_or_expected(metas, root / (sample_prefix(counts, "counts") + "_metadata.csv")):
                     add("nanostring", root, counts, meta, "cells_by_fov")
         for p in local:
-            is_gem = p.name.endswith((".gem", ".gem.gz"))
+            is_gem = p.name.endswith((".gem", ".gem.gz", ".gem2.gz"))
             if not is_gem and p.name.endswith((".tsv", ".tsv.gz", ".txt", ".txt.gz")):
                 try:
                     opener = gzip.open if p.name.endswith(".gz") else open
@@ -266,8 +266,8 @@ def discover(files: List[Path], requested: Path, technology=None):
                                 break
                 except (OSError, UnicodeError):
                     pass
-            if is_gem:
-                add("bgi", root, p, p, "native_xy_bins", binsize=1)
+            if is_gem or p.suffix.lower() == ".gef":
+                add("bgi", root, p, p, "native_gef" if p.suffix.lower() == ".gef" else "native_gem")
     # Files in two valid storage encodings or companion variants remain visible.
     unique = {(c.technology, str(c.counts), str(c.metadata), c.representation): c for c in out}
     return list(unique.values())

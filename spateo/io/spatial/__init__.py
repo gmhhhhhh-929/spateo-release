@@ -10,7 +10,7 @@ from ._seqfish import read_seqfish
 from ._seqscope import read_seqscope
 from ._slideseq import read_slideseq
 from ._starmap_plus import read_starmap_plus
-from ._stereoseq import read_bgi, read_bgi_agg, read_bgi_as_dataframe
+from ._stereoseq import read_bgi, read_bgi_agg, read_bgi_as_dataframe, read_stereoseq
 from ._utils import (
     bin_indices,
     bin_matrix,
@@ -49,6 +49,7 @@ __all__ = [
     "read_merfish",
     "read_starmap_plus",
     "read_bgi",
+    "read_stereoseq",
     "read_bgi_agg",
     "read_nanostring",
     "read_visium_hd",

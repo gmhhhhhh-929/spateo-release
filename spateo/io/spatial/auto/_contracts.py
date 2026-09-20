@@ -24,12 +24,8 @@ from ....configuration import SKM
 from ._discovery import Candidate
 
 
-class ContractError(ValueError):
-    """Required data cannot satisfy the selected format contract."""
-
-
-class ResourceDeferred(MemoryError):
-    """Reading would exceed the configured resource budget."""
+from ._errors import ContractError, ResourceDeferred
+from ._stereo import probe_stereo, read_stereo_core
 
 
 def _token(value):
@@ -396,7 +392,9 @@ def probe(candidate: Candidate, budget):
         raise ContractError(candidate.options["identity"])
     if tech == "visium_hd_bin" and not candidate.options.get("binsize"):
         raise ContractError("Cannot infer bin size from the supported square_NNN um directory layout")
-    if tech == "slideseq":
+    if tech == "bgi":
+        result = probe_stereo(candidate.counts, budget, candidate.options.get("stereoseq_bin_size"))
+    elif tech == "slideseq":
         result = _slideseq_counts(candidate.counts, budget=budget)
     elif candidate.counts.suffix == ".h5":
         result = _h5(candidate.counts)
@@ -404,15 +402,7 @@ def probe(candidate: Candidate, budget):
         result = _mex(candidate.counts)
     else:
         head = table(candidate.counts, budget=budget)
-        if tech == "bgi":
-            for aliases in [
-                ("geneID",),
-                ("x",),
-                ("y",),
-                ("MIDCount", "MIDCounts", "UMICount", "UMICounts", "count", "total"),
-            ]:
-                _column(head, aliases)
-        elif head.shape[1] < 2:
+        if head.shape[1] < 2:
             raise ContractError("Expression table must contain identifiers and expression columns")
         result = dict(
             estimated_bytes=max(
@@ -463,28 +453,13 @@ def _table_counts(candidate, metadata_ids, budget):
 def read_core(candidate: Candidate, budget):
     """Read one resolved layout under strict, explicit platform contracts."""
     if candidate.technology == "bgi":
-        frame = table(candidate.counts, full=True, budget=budget)
-        gene = _column(frame, ("geneID",))
-        x, y = _column(frame, ("x",)), _column(frame, ("y",))
-        count = _column(frame, ("MIDCount", "MIDCounts", "UMICount", "UMICounts", "count", "total"))
-        coords = _numeric(frame[[x, y]], "native coordinates", nonnegative=True)
-        values = _numeric(frame[count], "molecule counts", nonnegative=True)
-        if (
-            np.any(coords != np.floor(coords))
-            or np.any(values != np.floor(values))
-            or (frame[gene].astype(str).str.strip() == "").any()
-        ):
-            raise ContractError("BGI requires integer native coordinates/counts and nonempty gene IDs")
-        xy, rows = np.unique(coords, axis=0, return_inverse=True)
-        genes = pd.Index(pd.unique(frame[gene].astype(str)))
-        cols = genes.get_indexer(frame[gene].astype(str))
-        adata = AnnData(
-            sparse.coo_matrix((values, (rows, cols)), shape=(len(xy), len(genes))).tocsr(),
-            obs=pd.DataFrame(index=[f"{int(xx)}_{int(yy)}" for xx, yy in xy]),
-            var=pd.DataFrame(index=genes),
+        adata = read_stereo_core(
+            candidate.counts,
+            budget,
+            candidate.options.get("stereoseq_bin_size"),
+            candidate.options.get("stereoseq_chemistry"),
         )
-        units = "native integer coordinates; bin size one; observations are coordinate bins, not cells"
-        adata.obsm["spatial"] = xy
+        units = adata.uns["stereoseq"]["coordinate_system"]
     else:
         meta, xy, units = _meta(candidate, full=True, budget=budget)
         if candidate.counts.suffix == ".h5":
@@ -519,5 +494,7 @@ def read_core(candidate: Candidate, budget):
     libraries = metadata.get("library_ids", [])
     library = libraries[0] if len(libraries) == 1 else candidate.root.name
     metadata.update(coordinate_system=units, representation=candidate.representation)
+    if candidate.technology == "bgi":
+        metadata.update(adata.uns["stereoseq"])
     adata.uns["spatial"] = {library: {"images": {}, "scalefactors": {}, "metadata": metadata}}
     return adata

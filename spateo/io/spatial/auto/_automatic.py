@@ -90,7 +90,10 @@ def _assets(adata, candidate, enabled, budget, diagnostics):
                         slot["images"][key] = arr
                         used += arr.nbytes
                         status = "loaded"
-            except (OSError, ValueError, Image.DecompressionBombError) as exc:
+            except Image.DecompressionBombError as exc:
+                status = "deferred_resource"
+                diagnostics.append(_diagnostic("optional_image_resource_limit", exc, "warning", path=relative))
+            except (OSError, ValueError) as exc:
                 status = "unreadable"
                 diagnostics.append(_diagnostic("optional_image_error", exc, "warning", path=relative))
         slot["asset_status"][relative.replace("/", "__")] = status
@@ -132,6 +135,7 @@ def _memory_used(result):
         if entry.adata is not None:
             a = entry.adata
             total += a.X.data.nbytes + a.X.indices.nbytes + a.X.indptr.nbytes
+            total += sum(x.data.nbytes + x.indices.nbytes + x.indptr.nbytes for x in a.layers.values())
             total += int(a.obs.memory_usage(deep=True).sum() + a.var.memory_usage(deep=True).sum())
             total += sum(np.asarray(x).nbytes for x in a.obsm.values())
             for slot in a.uns.get("spatial", {}).values():
@@ -192,7 +196,11 @@ def _load(entry, candidate, result, files, budget, load_images, reason, signatur
             source=candidate.root,
             reader="spateo.io.spatial.auto._contracts.read_core",
             evidence=tuple(entry.evidence),
-            reader_kwargs={"representation": candidate.representation, "load_images": load_images},
+            reader_kwargs={
+                "representation": candidate.representation,
+                "load_images": load_images,
+                **{k: v for k, v in candidate.options.items() if k.startswith("stereoseq_") and v is not None},
+            },
             manifest=manifest,
             format_status="preview-xenium-v4" if candidate.technology == "atera" else "validated_core",
         )
@@ -238,6 +246,8 @@ def read_spatial(
     max_memory_bytes: int = _DEFAULT_MEMORY,
     max_files: int = 10000,
     max_depth: int = 4,
+    stereoseq_bin_size: Optional[int] = None,
+    stereoseq_chemistry: Optional[str] = None,
 ) -> SpatialReadResult:
     """Automatically read supported spatial layouts without confidence thresholds.
 
@@ -252,8 +262,19 @@ def read_spatial(
     and depth limits are resource bounds, never statistical matching thresholds.
     ``max_memory_bytes`` is a conservative allocation budget, not an OS RSS cap.
     Entries exceeding it remain explicitly deferred and can be loaded later.
+    ``stereoseq_bin_size`` optionally aggregates GEM records into square bins
+    or selects an existing GEF resolution. Omitted: preserve GEM resolution,
+    or select the smallest stored GEF bin. CellBin stays cells.
+    ``stereoseq_chemistry`` records a user-declared V1/V2 label; matrix schema
+    versions never determine chemistry. All input features are preserved.
     See ``docs/technicals/automatic_spatial_reading.md`` for supported contracts.
     """
+    if stereoseq_chemistry not in (None, "V1", "V2"):
+        raise ValueError("stereoseq_chemistry must be V1, V2 or None")
+    if stereoseq_bin_size is not None and (
+        isinstance(stereoseq_bin_size, bool) or not isinstance(stereoseq_bin_size, int) or stereoseq_bin_size < 1
+    ):
+        raise ValueError("stereoseq_bin_size must be a positive integer")
     if not isinstance(max_memory_bytes, int) or max_memory_bytes <= 0 or max_files <= 0 or max_depth < 0:
         raise ValueError("Invalid memory/inventory/depth resource limits")
     allowed = _canonical_technologies(technology)
@@ -272,6 +293,9 @@ def read_spatial(
         "symlinks_followed": False,
     }
     all_candidates = discover(files, requested)
+    for c in all_candidates:
+        if c.technology == "bgi":
+            c.options.update(stereoseq_bin_size=stereoseq_bin_size, stereoseq_chemistry=stereoseq_chemistry)
     candidates = [c for c in all_candidates if allowed is None or c.technology in allowed]
     result.discovery["technology_filter"] = technology
     result.discovery["excluded_by_technology"] = len(all_candidates) - len(candidates)

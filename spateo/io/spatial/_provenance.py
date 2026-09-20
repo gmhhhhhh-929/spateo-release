@@ -14,6 +14,8 @@ def _asset_role(path: Path) -> str:
     """Return a coarse, format-independent role for a spatial output file."""
     name = path.name.lower()
     suffixes = "".join(path.suffixes).lower()
+    if suffixes.endswith((".gem", ".gem.gz", ".gem2.gz", ".gef")):
+        return "expression_matrix"
     if "matrix" in name or suffixes.endswith(".mtx.gz") or suffixes.endswith(".mtx"):
         return "expression_matrix"
     if "transcript" in name or "molecule" in name:
