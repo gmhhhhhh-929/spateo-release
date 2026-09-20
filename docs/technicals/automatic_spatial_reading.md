@@ -207,3 +207,8 @@ python scripts/verify_automatic_spatial_reading.py /path/to/V1_Adult_Mouse_Brain
 
 
 Cross-format validation now covers 11 categories, 550 cases and 1,650 calls, with additional local real-source checks across seven categories. See the [full benchmark report](automatic_spatial_reading_benchmark_zh.md) for rounds, denominators, retained initial failures and untested real-data categories.
+
+
+### Native Slide-seq large CSV files
+
+Slide-seq gene-by-bead CSV inputs use a row-streaming sparse adapter. Probe estimates bounded row workspace; full reading checks every value and identifier and enforces a growing sparse-storage budget. This avoids materializing a dense string table. See [the verified native Slide-seq example](native_slideseq_reading_zh.md) for image-budget behavior and the distinction between puck identifiers and serial-section order.

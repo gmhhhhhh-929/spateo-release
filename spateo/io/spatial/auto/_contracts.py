@@ -7,6 +7,7 @@ Probes check structure only; ``read_core`` validates all core identifiers and va
 from __future__ import annotations
 
 import csv
+from array import array
 import gzip
 import json
 import re
@@ -328,6 +329,60 @@ def _meta(candidate, *, full=False, budget=512 * 1024**2):
     return frame, values, units
 
 
+def _slideseq_counts(path, *, full=False, budget=512 * 1024**2):
+    """Stream gene-by-bead CSV into sparse storage without a dense table.
+
+    Probe estimates only the bounded row workspace; the full scan enforces a
+    growing sparse-storage budget. All values, row widths and IDs are checked.
+    """
+    with _open(path) as handle:
+        lines = (line for line in handle if line.strip() and not line.startswith("#"))
+        first = next(lines, None)
+        if first is None:
+            raise ContractError(f"Empty table: {path}")
+        sep = "\t" if first.count("\t") > first.count(",") else ","
+        header = next(csv.reader([first], delimiter=sep))
+        if len(header) < 2 or len(set(header)) != len(header):
+            raise ContractError("Slide-seq requires unique barcode columns and a gene column")
+        ids = _ids(header[1:], "Slide-seq expression barcodes")
+        workspace = len(header) * 1024
+        if workspace > budget:
+            raise ResourceDeferred("Slide-seq row workspace exceeds memory budget")
+        reader = csv.reader(lines, delimiter=sep)
+        values, indices, indptr = array("d"), array("q"), array("q", [0])
+        genes = []
+        for row in reader:
+            if len(row) != len(header):
+                raise ContractError(f"Slide-seq row {len(genes) + 2} has inconsistent field count")
+            gene = row[0]
+            if not gene.strip() or gene.lower() in ("nan", "none", "<na>"):
+                raise ContractError("Missing Slide-seq gene identifier")
+            numeric = _numeric(row[1:], "Slide-seq counts", nonnegative=True)
+            if not full:
+                return dict(estimated_bytes=workspace, storage="streamed_slideseq_csv", n_obs=len(ids))
+            nz = np.flatnonzero(numeric)
+            # Reserve space for buffers, final CSR conversion, ID tables and one row.
+            estimated = workspace + (len(genes) + 1) * 1024 + (len(values) + len(nz)) * 64
+            if estimated > budget:
+                raise ResourceDeferred("Slide-seq sparse storage exceeds memory budget")
+            values.frombytes(numeric[nz].astype(np.float64, copy=False).tobytes())
+            indices.frombytes(nz.astype(np.int64, copy=False).tobytes())
+            indptr.append(len(values))
+            genes.append(gene)
+        if not genes:
+            raise ContractError(f"Empty expression table: {path}")
+        gene_ids = _ids(genes, "Slide-seq expression genes")
+        matrix = sparse.csr_matrix(
+            (
+                np.frombuffer(values, dtype=np.float64),
+                np.frombuffer(indices, dtype=np.int64),
+                np.frombuffer(indptr, dtype=np.int64),
+            ),
+            shape=(len(genes), len(ids)),
+        ).T.tocsr()
+        return AnnData(matrix, obs=pd.DataFrame(index=ids), var=pd.DataFrame(index=gene_ids))
+
+
 def probe(candidate: Candidate, budget):
     """Bounded format checks; no ranking, inference of missing values, or IO writes."""
     tech = candidate.technology
@@ -341,7 +396,9 @@ def probe(candidate: Candidate, budget):
         raise ContractError(candidate.options["identity"])
     if tech == "visium_hd_bin" and not candidate.options.get("binsize"):
         raise ContractError("Cannot infer bin size from the supported square_NNN um directory layout")
-    if candidate.counts.suffix == ".h5":
+    if tech == "slideseq":
+        result = _slideseq_counts(candidate.counts, budget=budget)
+    elif candidate.counts.suffix == ".h5":
         result = _h5(candidate.counts)
     elif candidate.counts.is_dir():
         result = _mex(candidate.counts)
@@ -371,6 +428,8 @@ def probe(candidate: Candidate, budget):
 
 
 def _table_counts(candidate, metadata_ids, budget):
+    if candidate.technology == "slideseq":
+        return _slideseq_counts(candidate.counts, full=True, budget=budget)
     frame = table(candidate.counts, full=True, budget=budget)
     tech = candidate.technology
     if tech == "nanostring":
