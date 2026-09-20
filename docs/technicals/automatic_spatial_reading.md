@@ -64,10 +64,10 @@ not assumed equivalent: unresolved alternatives remain visible.
 | Xenium-compatible | Cell-feature H5 plus `cells` CSV/Parquet with unique IDs and centroids |
 | Atera | Compatible cell core plus explicit Atera/WTA identity in recognized experiment metadata fields |
 | MERFISH | Matching `cell_by_gene` / `cell_metadata` groups, numeric expression and identified coordinates |
-| seqFISH | Matching counts / cell-coordinate groups; orientation resolved by complete ID membership |
+| seqFISH | Matching counts / cell-coordinate groups, including explicit label IDs; orientation resolved by complete ID membership |
 | CosMx | Expression and metadata pairs, compound cell/FOV IDs and local pixel coordinates; optional global coordinates |
 | Slide-seq | Gene-by-bead expression table, named bead coordinates |
-| STARmap PLUS | Raw or processed expression and corresponding spatial tables with explicit IDs |
+| STARmap PLUS | Raw or processed expression and corresponding spatial tables with explicit IDs; supported TYPE declarations are parsed as schema |
 | Stereo-seq/BGI | GEM, or TSV/TXT with supported molecule-table header; native integer XY bins and total counts |
 
 `obsm['spatial']` preserves a table's supported Z column when present. Visium
@@ -191,7 +191,7 @@ order and coordinate against the original 10x H5 and positions table. Ordinary
 unit tests use small synthetic bundles across every supported core technology;
 they are not claims of full real-world validation for every platform.
 
-The implementation validation completed on 2026-09-20: **77 tests passed**,
+The implementation validation completed on 2026-09-20: **81 tests passed**,
 `make check` passed, and full real Visium content plus H5AD round-trip checks
 passed. See the [validation record](automatic_spatial_reading_validation.md).
 To reproduce the independent real-data report:
@@ -199,3 +199,6 @@ To reproduce the independent real-data report:
 ```bash
 python scripts/verify_automatic_spatial_reading.py /path/to/V1_Adult_Mouse_Brain --output /path/to/report
 ```
+
+
+Cross-format validation now covers 11 categories, 550 cases and 1,650 calls, with additional local real-source checks across seven categories. See the [full benchmark report](automatic_spatial_reading_benchmark_zh.md) for rounds, denominators, retained initial failures and untested real-data categories.

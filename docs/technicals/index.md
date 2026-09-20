@@ -12,5 +12,6 @@ spatial_io_preprocessing
 automatic_spatial_reading
 automatic_spatial_reading_zh
 automatic_spatial_reading_validation
+automatic_spatial_reading_benchmark_zh
 serial_slice_quality_control
 ```

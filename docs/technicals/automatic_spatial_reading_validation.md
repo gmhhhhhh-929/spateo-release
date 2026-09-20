@@ -14,7 +14,7 @@ python -m isort --profile black --check-only scripts/verify_automatic_spatial_re
 git diff --check
 ```
 
-- IO and preprocessing: **77 passed**, 2 warnings, no failures or skips.
+- IO and preprocessing: **81 passed**, 2 warnings, no failures or skips.
 - `make check`: compilation and configured isort/Black checks passed (87 files).
 - The verification script passed separate formatting/import-order checks.
 - Warnings are not converted into passes for failed content checks. The real
@@ -64,3 +64,5 @@ This creates `real_visium_validation.json`, `spatial_read_report.json`, and
 input dataset. The report is evidence for this dataset and code version; it is
 not a calibrated detector accuracy estimate or validation of all platforms on
 real data.
+
+Cross-platform expansion: see the [complete benchmark report](automatic_spatial_reading_benchmark_zh.md) for 11 format categories, synthetic positive/negative cases, seven real-source categories and retained initial failures.

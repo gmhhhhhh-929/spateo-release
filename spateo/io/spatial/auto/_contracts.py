@@ -281,6 +281,16 @@ def _meta(candidate, *, full=False, budget=512 * 1024**2):
         frame = pd.DataFrame({"geometry": geometries}, index=_ids(ids, "segmentation"))
         return frame, _numeric(xy, "centroids"), "geometry coordinate units (not declared)"
     frame = table(candidate.metadata, full=full, budget=budget, positions=tech in ("visium", "visium_hd_bin"))
+    if tech == "starmap_plus" and "NAME" in frame and frame.iloc[0]["NAME"] == "TYPE":
+        # STARmap exports may contain one schema row, not an observation.
+        axes = [c for c in ("X", "Y", "Z") if c in frame]
+        if len(axes) < 2 or any(frame.iloc[0][c] != "numeric" for c in axes):
+            raise ContractError("Malformed STARmap TYPE coordinate declaration")
+        if any(v not in ("numeric", "group", "string") for v in frame.iloc[0].drop("NAME")):
+            raise ContractError("Unknown STARmap TYPE field declaration")
+        frame = frame.iloc[1:].copy()
+        if frame.empty:
+            raise ContractError("STARmap spatial table contains only a TYPE declaration")
     if tech in ("visium", "visium_hd_bin"):
         missing = set(_POS) - set(frame.columns)
         if missing:
@@ -302,7 +312,8 @@ def _meta(candidate, *, full=False, budget=512 * 1024**2):
         )
         units = "FOV-local pixels; FOVs are not implicitly aligned"
     else:
-        key = _column(frame, _ID, first_index=True)
+        aliases = (*_ID, "label", "celllabel") if tech == "seqfish" else _ID
+        key = _column(frame, aliases, first_index=True)
         xy = (_column(frame, _X), _column(frame, _Y))
         try:
             z = _column(frame, ("center_z", "global_z", "z_centroid", "centroid_z", "zcoord", "z_coord", "z"))

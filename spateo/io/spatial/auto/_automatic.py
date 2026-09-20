@@ -109,6 +109,8 @@ def _key(candidate, scope):
 
 def _resolve(candidates):
     """Only explicit specialization relations can remove overlapping claims."""
+    if not candidates:
+        return None, "No candidate passed the required format contract"
     # Exact MERFISH file prefixes are a specialization of generic seqFISH tables.
     merfish = [c for c in candidates if c.technology == "merfish"]
     if merfish:

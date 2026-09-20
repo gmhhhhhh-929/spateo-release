@@ -1,0 +1,9 @@
+{
+  "spateo/io/spatial/auto/__init__.py": "44a472f70e4c50d603214d2739dcaec0b6f906bc0de83f82b9e691f2a981c5da",
+  "spateo/io/spatial/auto/_automatic.py": "0974886ce59db208c9a7730318fcc2db5d0285c1c26cd7a9936eb4de72033315",
+  "spateo/io/spatial/auto/_contracts.py": "e3ba41a03c2468ca2a7abe428c7f0f8e1951609d30bac7c017f3c1b7c0ee2577",
+  "spateo/io/spatial/auto/_discovery.py": "12b4b2a42cc3aaec209ee3a4fc0708723f01660a6116cbd2c8c7b7e7a39abfd2",
+  "spateo/io/spatial/auto/_result.py": "574ab09eb4f3ba818ee24418e885c767e8de9c494c1520e3f38a2e58760ead77",
+  "scripts/benchmark_automatic_spatial_reading.py": "65fae299d8e9c1b98ec1117446d576630ffbd6e6eeb9a4287050b1690586f2e3",
+  "scripts/benchmark_spatial_local_data.py": "6fc3e291d46e1229146742c7431e8bd98b0181d8652e32281512f655fd3bbd6a"
+}

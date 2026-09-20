@@ -158,6 +158,8 @@ entry.load()
 - `spateo/io/__init__.py` 与 `spateo/io/spatial/__init__.py`：导出新入口与结果类型。
 - `tests/io/test_automatic_reading.py`：行为测试与可选择启用的真实 Visium 完整对照。
 - `scripts/verify_automatic_spatial_reading.py`：真实 Visium 全量对照、H5AD 往返与 SHA-256 验证记录。
+- `scripts/benchmark_automatic_spatial_reading.py` 与 `scripts/benchmark_spatial_local_data.py`：全格式合成正负例和本地真实来源数据的可复现基准。
+- 全技术测试报告与机器可读原始记录：每类指标、混淆矩阵、重复统计、失败和真实数据缺口。
 - 中英文技术文档及技术目录、README：使用方式、兼容性和限制。
 
 没有修改旧自动入口的分数、阈值或排序，也没有为了让新入口“看起来成功”放宽旧测试。
@@ -166,7 +168,7 @@ entry.load()
 
 测试覆盖所有上述核心技术的小型合成文件、HD 多尺度、MEX、Parquet、三维坐标、空文件、非法数值、缺失／重复 ID、多对象、延迟读取、图片失败、源文件变化和符号链接。
 
-真实数据使用 10x 公共 `V1_Adult_Mouse_Brain`（Space Ranger 1.1.0）。验证必须比较全部矩阵值、全部 barcode 顺序和逐 barcode XY 坐标，不能用“能够运行”替代内容一致性检查。本次 IO 与预处理回归共 **77 项通过**，仓库 `make check` 通过。真实对象为 **2,702 × 32,285**，包含 **16,031,101** 个非零元素、总 UMI **85,825,294**；全部核心对照与 H5AD 写入／重读检查通过。详见[完整验证记录](automatic_spatial_reading_validation.md)。
+真实数据使用 10x 公共 `V1_Adult_Mouse_Brain`（Space Ranger 1.1.0）。验证必须比较全部矩阵值、全部 barcode 顺序和逐 barcode XY 坐标，不能用“能够运行”替代内容一致性检查。本次 IO 与预处理回归共 **81 项通过**，仓库 `make check` 通过。真实对象为 **2,702 × 32,285**，包含 **16,031,101** 个非零元素、总 UMI **85,825,294**；全部核心对照与 H5AD 写入／重读检查通过。详见[完整验证记录](automatic_spatial_reading_validation.md)。
 
 公开数据页：https://www.10xgenomics.com/datasets/mouse-brain-section-coronal-1-standard-1-1-0
 
@@ -197,3 +199,6 @@ adata = result.adata
 ```
 
 对多输入应显式遍历 `result.datasets`。不要在迁移时随意取 `next(...)` 的第一个 ready 对象当成整个数据集；也不应通过调高／调低分数掩盖文件或身份冲突。
+
+
+跨平台验证已扩展到 11 类格式、550 个案例、1,650 次调用；另有 7 类本地真实来源输入核验。完整轮次、分母、初始失败及真实数据缺口见[全技术测试报告](automatic_spatial_reading_benchmark_zh.md)。

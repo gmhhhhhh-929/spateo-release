@@ -1,0 +1,957 @@
+{
+  "repeats": 3,
+  "unique_core_cases": 10,
+  "calls": 30,
+  "technology_count": 7,
+  "unavailable_real_technologies": [
+    "atera",
+    "nanostring",
+    "visium_hd_cellseg",
+    "slideseq_complete_core"
+  ],
+  "full_check_pass": 30,
+  "results": [
+    {
+      "name": "visium_mouse_brain_full",
+      "technology": "visium",
+      "input_kind": "complete_core",
+      "repeat": 1,
+      "shape": [
+        2702,
+        32285
+      ],
+      "nnz": 16031101,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.6655727909819689,
+      "diagnostics": []
+    },
+    {
+      "name": "visium_mouse_brain_full",
+      "technology": "visium",
+      "input_kind": "complete_core",
+      "repeat": 2,
+      "shape": [
+        2702,
+        32285
+      ],
+      "nnz": 16031101,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.5881716659932863,
+      "diagnostics": []
+    },
+    {
+      "name": "visium_mouse_brain_full",
+      "technology": "visium",
+      "input_kind": "complete_core",
+      "repeat": 3,
+      "shape": [
+        2702,
+        32285
+      ],
+      "nnz": 16031101,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.6009220409905538,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_mouse_brain_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 1,
+      "shape": [
+        36602,
+        541
+      ],
+      "nnz": 2620367,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.18784541697823443,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_mouse_brain_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 2,
+      "shape": [
+        36602,
+        541
+      ],
+      "nnz": 2620367,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.18206250001094304,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_mouse_brain_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 3,
+      "shape": [
+        36602,
+        541
+      ],
+      "nnz": 2620367,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.1767817919899244,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_ovary_tiny_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 1,
+      "shape": [
+        623,
+        511
+      ],
+      "nnz": 49324,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.030328082997584715,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_ovary_tiny_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 2,
+      "shape": [
+        623,
+        511
+      ],
+      "nnz": 49324,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.024085249984636903,
+      "diagnostics": []
+    },
+    {
+      "name": "xenium_ovary_tiny_full",
+      "technology": "xenium",
+      "input_kind": "complete_local_core",
+      "repeat": 3,
+      "shape": [
+        623,
+        511
+      ],
+      "nnz": 49324,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.024449125019600615,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_small_full",
+      "technology": "merfish",
+      "input_kind": "complete_local_core",
+      "repeat": 1,
+      "shape": [
+        103,
+        550
+      ],
+      "nnz": 11478,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.13825933300540783,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_small_full",
+      "technology": "merfish",
+      "input_kind": "complete_local_core",
+      "repeat": 2,
+      "shape": [
+        103,
+        550
+      ],
+      "nnz": 11478,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.0750336250057444,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_small_full",
+      "technology": "merfish",
+      "input_kind": "complete_local_core",
+      "repeat": 3,
+      "shape": [
+        103,
+        550
+      ],
+      "nnz": 11478,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.11406799999531358,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_first1000_cells",
+      "technology": "merfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 1,
+      "shape": [
+        1000,
+        649
+      ],
+      "nnz": 70348,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.1950935409986414,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_first1000_cells",
+      "technology": "merfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 2,
+      "shape": [
+        1000,
+        649
+      ],
+      "nnz": 70348,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.2357462499930989,
+      "diagnostics": []
+    },
+    {
+      "name": "merfish_first1000_cells",
+      "technology": "merfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 3,
+      "shape": [
+        1000,
+        649
+      ],
+      "nnz": 70348,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.2348994160129223,
+      "diagnostics": []
+    },
+    {
+      "name": "seqfish_first1000_cells",
+      "technology": "seqfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 1,
+      "shape": [
+        1000,
+        221
+      ],
+      "nnz": 61230,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.053463582997210324,
+      "diagnostics": []
+    },
+    {
+      "name": "seqfish_first1000_cells",
+      "technology": "seqfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 2,
+      "shape": [
+        1000,
+        221
+      ],
+      "nnz": 61230,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.054815332987345755,
+      "diagnostics": []
+    },
+    {
+      "name": "seqfish_first1000_cells",
+      "technology": "seqfish",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 3,
+      "shape": [
+        1000,
+        221
+      ],
+      "nnz": 61230,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.05417783299344592,
+      "diagnostics": []
+    },
+    {
+      "name": "starmap_first1000_cells",
+      "technology": "starmap_plus",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 1,
+      "shape": [
+        1000,
+        1022
+      ],
+      "nnz": 119391,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.29646699997829273,
+      "diagnostics": []
+    },
+    {
+      "name": "starmap_first1000_cells",
+      "technology": "starmap_plus",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 2,
+      "shape": [
+        1000,
+        1022
+      ],
+      "nnz": 119391,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.2987974999996368,
+      "diagnostics": []
+    },
+    {
+      "name": "starmap_first1000_cells",
+      "technology": "starmap_plus",
+      "input_kind": "derived_first1000_cells",
+      "repeat": 3,
+      "shape": [
+        1000,
+        1022
+      ],
+      "nnz": 119391,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.2988077919872012,
+      "diagnostics": []
+    },
+    {
+      "name": "visium_hd_first1000_bins",
+      "technology": "visium_hd_bin",
+      "input_kind": "derived_first1000_filtered_bins",
+      "repeat": 1,
+      "shape": [
+        1000,
+        19070
+      ],
+      "nnz": 361759,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.02700574998743832,
+      "diagnostics": []
+    },
+    {
+      "name": "visium_hd_first1000_bins",
+      "technology": "visium_hd_bin",
+      "input_kind": "derived_first1000_filtered_bins",
+      "repeat": 2,
+      "shape": [
+        1000,
+        19070
+      ],
+      "nnz": 361759,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.025806459016166627,
+      "diagnostics": []
+    },
+    {
+      "name": "visium_hd_first1000_bins",
+      "technology": "visium_hd_bin",
+      "input_kind": "derived_first1000_filtered_bins",
+      "repeat": 3,
+      "shape": [
+        1000,
+        19070
+      ],
+      "nnz": 361759,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.02565020800102502,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_first10000_molecule_rows",
+      "technology": "bgi",
+      "input_kind": "derived_first10000_molecule_rows",
+      "repeat": 1,
+      "shape": [
+        5985,
+        4293
+      ],
+      "nnz": 10000,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.06283579199225642,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_first10000_molecule_rows",
+      "technology": "bgi",
+      "input_kind": "derived_first10000_molecule_rows",
+      "repeat": 2,
+      "shape": [
+        5985,
+        4293
+      ],
+      "nnz": 10000,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.018176292011048645,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_first10000_molecule_rows",
+      "technology": "bgi",
+      "input_kind": "derived_first10000_molecule_rows",
+      "repeat": 3,
+      "shape": [
+        5985,
+        4293
+      ],
+      "nnz": 10000,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.01796491601271555,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_repository_fixture_full",
+      "technology": "bgi",
+      "input_kind": "repository_real_data_fixture",
+      "repeat": 1,
+      "shape": [
+        41915,
+        10631
+      ],
+      "nnz": 77634,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.11916724999900907,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_repository_fixture_full",
+      "technology": "bgi",
+      "input_kind": "repository_real_data_fixture",
+      "repeat": 2,
+      "shape": [
+        41915,
+        10631
+      ],
+      "nnz": 77634,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.11446062498725951,
+      "diagnostics": []
+    },
+    {
+      "name": "bgi_repository_fixture_full",
+      "technology": "bgi",
+      "input_kind": "repository_real_data_fixture",
+      "repeat": 3,
+      "shape": [
+        41915,
+        10631
+      ],
+      "nnz": 77634,
+      "status": "ok",
+      "checks": {
+        "status_ok": true,
+        "unique": true,
+        "correct_technology": true,
+        "matrix_shape": true,
+        "all_values": true,
+        "all_observation_ids": true,
+        "all_feature_names": true,
+        "all_coordinates": true
+      },
+      "passed": true,
+      "seconds": 0.11726129200542346,
+      "diagnostics": []
+    }
+  ],
+  "sources": [
+    {
+      "label": "visium_mouse_brain_full",
+      "file": "filtered_feature_bc_matrix.h5",
+      "bytes": 21106953,
+      "sha256": "eb78379e02dcf48036abf05b67233e73ecb0d880787feb82f76ff16f6ce01eb3"
+    },
+    {
+      "label": "visium_mouse_brain_full",
+      "file": "tissue_positions_list.csv",
+      "bytes": 185022,
+      "sha256": "19be19741e7a7ec27615ebab4b2629273167b69efb5e4158af0ea92de3ff99ae"
+    },
+    {
+      "label": "xenium_mouse_brain_full",
+      "file": "cell_feature_matrix.h5",
+      "bytes": 2852040,
+      "sha256": "c46affded533ee3802a8136ab61b51868831a9cd07226121f5426c81bccde12d"
+    },
+    {
+      "label": "xenium_mouse_brain_full",
+      "file": "cells.csv",
+      "bytes": 2961662,
+      "sha256": "3ab5511814c7f3e178335f38e44473b5154fcefaf7fd32e646431e1274358b59"
+    },
+    {
+      "label": "xenium_ovary_tiny_full",
+      "file": "cell_feature_matrix.h5",
+      "bytes": 93769,
+      "sha256": "8df93ccf183eca60cec8a7d1975d5ffcf8b97f2d09fdd78ee017f31656117119"
+    },
+    {
+      "label": "xenium_ovary_tiny_full",
+      "file": "cells.csv.gz",
+      "bytes": 42909,
+      "sha256": "2bc019ef8415a6cfc4a48ce417d9e460c977b4dbf787cae73e7cee5b4a299e59"
+    },
+    {
+      "label": "merfish_small_full",
+      "file": "cell_by_gene.csv",
+      "bytes": 121653,
+      "sha256": "288e8cdfcf8a69bb85f2d4fa8e90fa02d2df76084092d43b8a5d144690414ad1"
+    },
+    {
+      "label": "merfish_small_full",
+      "file": "cell_metadata.csv",
+      "bytes": 17596,
+      "sha256": "4db35852b99fcbb26b5cf8e2ffa51246101d1f4e7b027fd865bf1c8c6f548408"
+    },
+    {
+      "label": "merfish_first1000_cells",
+      "file": "cell_by_gene.csv",
+      "bytes": 207171875,
+      "sha256": "5195b863cb38f47eefb35dccb5663f2febb4a9619ebda90097712b3f5ad99062"
+    },
+    {
+      "label": "merfish_first1000_cells",
+      "file": "cell_metadata.csv",
+      "bytes": 13397460,
+      "sha256": "f8b7bf422e31d5197a1de22c862c4a3de7bab2f2d07f338a382c5f47f65cca37"
+    },
+    {
+      "label": "seqfish_first1000_cells",
+      "file": "SG_MouseKidneyDataRelease_CxG_section3.csv",
+      "bytes": 78552220,
+      "sha256": "e8f2f2d5d8a47f16474406b05a1488f4c6f7d1cd9d4c2de12b850a6adc0767f6"
+    },
+    {
+      "label": "seqfish_first1000_cells",
+      "file": "SG_MouseKidneyDataRelease_CellCoordinates_section3.csv",
+      "bytes": 4194913,
+      "sha256": "44ed56ca3ba95b4bbee581ff2c8ba4a2b6a88ac5a62aa23ab46126428482dc1a"
+    },
+    {
+      "label": "starmap_first1000_cells",
+      "file": "well2_5raw_expression_pd.csv",
+      "bytes": 60750938,
+      "sha256": "360e3512d00b3df04ae32121e57de89366603d8cb051ded5c84004275151f456"
+    },
+    {
+      "label": "starmap_first1000_cells",
+      "file": "well2_5_spatial.csv",
+      "bytes": 3941572,
+      "sha256": "15c43e62ad45ed75912a28a4cd737c425008ab0b61c7e6ce296312d238daba64"
+    },
+    {
+      "label": "visium_hd_first1000_bins",
+      "file": "filtered_feature_bc_matrix.h5",
+      "bytes": 253860545,
+      "sha256": "deb5edc3b3d284ece1ec26e2855d8431e4691c9d63d97b82932f2e3acd10ce77"
+    },
+    {
+      "label": "visium_hd_first1000_bins",
+      "file": "tissue_positions.parquet",
+      "bytes": 11356789,
+      "sha256": "e0d907dac2172126ea1a673e4d2b7fb4fa6547172ed47a81c8865cc8814d6b16"
+    },
+    {
+      "label": "bgi_first10000_molecule_rows",
+      "file": "SS200000135TL_D1_all_bin1.txt.gz",
+      "bytes": 18867996,
+      "sha256": "6aa6d74ebb4055fddd75120be4ee09535270f48f9c6134b5133db0194727489b"
+    },
+    {
+      "label": "bgi_repository_fixture_full",
+      "file": "SS200000135TL_D1_bin1_small.gem.gz",
+      "bytes": 403961,
+      "sha256": "621c0caf5d9e41e6f1b6f4e53ba42c59772a40a4acaa66a619c3a2824a276116"
+    }
+  ],
+  "original_layout_inspections": [
+    {
+      "name": "original_hd_multiple_encodings",
+      "status": "partial",
+      "entries": [
+        {
+          "technology": "visium_hd_bin",
+          "status": "unresolved",
+          "evidence": [
+            "visium_hd_bin: filtered_feature_bc_matrix.h5 + tissue_positions.parquet",
+            "visium_hd_bin: filtered_feature_bc_matrix + tissue_positions.parquet"
+          ],
+          "diagnostics": [
+            {
+              "code": "unresolved_layout",
+              "message": "Multiple validated readers or companion encodings claim the same logical input",
+              "severity": "error"
+            }
+          ]
+        },
+        {
+          "technology": "visium_hd_bin",
+          "status": "deferred",
+          "evidence": [
+            "raw_feature_bc_matrix.h5",
+            "spatial/tissue_positions.parquet"
+          ],
+          "diagnostics": [
+            {
+              "code": "load_deferred",
+              "message": "Content loading was not requested",
+              "severity": "info"
+            }
+          ]
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "name": "original_slideseq_missing_counts",
+      "status": "failed",
+      "entries": [
+        {
+          "technology": "slideseq",
+          "status": "failed",
+          "evidence": [
+            "slideseq: MappedDGEForR.csv + BeadLocationsForR.csv"
+          ],
+          "diagnostics": [
+            {
+              "code": "probe_failed",
+              "message": "Missing required file: <primary-root>/Slideseq/MappedDGEForR.csv",
+              "severity": "error",
+              "technology": "slideseq",
+              "exception_type": "ContractError"
+            },
+            {
+              "code": "no_valid_contract",
+              "message": "No candidate passed the required format contract",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "name": "original_seqfish_cortex_unsupported_layout",
+      "status": "failed",
+      "entries": [],
+      "diagnostics": [
+        {
+          "code": "unsupported_layout",
+          "message": "No supported spatial core layout found; no generic reader was guessed.",
+          "severity": "error"
+        }
+      ]
+    }
+  ],
+  "code_commit": "6005c0a6d3d8b983fc050f09df5efb7eafe85ee9",
+  "working_tree_dirty": true,
+  "limitations": "User-provided local exports; not all original downloads have independently verified provenance. Derived subsets are not complete original datasets; repeated calls are not independent samples."
+}

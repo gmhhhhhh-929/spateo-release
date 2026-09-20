@@ -118,6 +118,31 @@ def test_platform_contracts_are_lossless(tmp_path, tech):
     np.testing.assert_array_equal(r.adata.obsm["spatial"], [[20, 10], [21, 11]])
 
 
+def test_seqfish_vendor_label_identifier(tmp_path):
+    table_bundle(tmp_path, "seqfish")
+    p = tmp_path / "SG_CellCoordinates_S1.csv"
+    frame = pd.read_csv(p).rename(columns={"cell_id": "label"})
+    frame.to_csv(p, index=False)
+    a = read_spatial(tmp_path).adata
+    assert list(a.obs_names) == ["c1", "c2"]
+    np.testing.assert_array_equal(a.obsm["spatial"], [[20, 10], [21, 11]])
+
+
+@pytest.mark.parametrize("declaration", ["numeric", "invalid", "nan"])
+def test_starmap_type_declaration_is_not_an_observation(tmp_path, declaration):
+    table_bundle(tmp_path, "starmap_plus")
+    p = tmp_path / "sample_spatial.csv"
+    frame = pd.read_csv(p)
+    frame = pd.concat([pd.DataFrame([{"NAME": "TYPE", "X": declaration, "Y": "numeric"}]), frame])
+    frame.to_csv(p, index=False)
+    result = read_spatial(tmp_path)
+    if declaration == "numeric":
+        np.testing.assert_array_equal(result.adata.obsm["spatial"], [[20, 10], [21, 11]])
+        assert "TYPE" not in result.adata.obs_names
+    else:
+        assert result.status == "failed"
+
+
 def test_hd_all_resolutions_and_cellseg_returned(tmp_path):
     outs = tmp_path / "outs"
     for size in ("008", "016"):

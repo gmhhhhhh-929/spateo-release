@@ -1,0 +1,12 @@
+true_technology,visium,visium_hd_bin,visium_hd_cellseg,xenium,atera,merfish,seqfish,nanostring,slideseq,starmap_plus,bgi,rejected
+visium,20,0,0,0,0,0,0,0,0,0,0,0
+visium_hd_bin,0,20,0,0,0,0,0,0,0,0,0,0
+visium_hd_cellseg,0,0,20,0,0,0,0,0,0,0,0,0
+xenium,0,0,0,20,0,0,0,0,0,0,0,0
+atera,0,0,0,0,20,0,0,0,0,0,0,0
+merfish,0,0,0,0,0,20,0,0,0,0,0,0
+seqfish,0,0,0,0,0,0,20,0,0,0,0,0
+nanostring,0,0,0,0,0,0,0,20,0,0,0,0
+slideseq,0,0,0,0,0,0,0,0,20,0,0,0
+starmap_plus,0,0,0,0,0,0,0,0,0,20,0,0
+bgi,0,0,0,0,0,0,0,0,0,0,20,0
