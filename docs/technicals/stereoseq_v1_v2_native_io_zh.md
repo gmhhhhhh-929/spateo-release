@@ -99,7 +99,7 @@ PRISTA4D 的 serial-section 元数据和作者说明已核对，但当前 STOmic
 
 | 函数 | 仓库文件及行号 |
 |---|---|
-| read_spatial | spateo/_registry.py:229 |
+| read_spatial | spateo/io/spatial/auto/_automatic.py:240 |
 | inventory | spateo/io/spatial/auto/_discovery.py:35 |
 | discover | spateo/io/spatial/auto/_discovery.py:99 |
 | probe | spateo/io/spatial/auto/_contracts.py:382 |
