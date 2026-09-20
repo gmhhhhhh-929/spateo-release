@@ -38,8 +38,13 @@ from .auto import (
     read_auto_spatial,
     read_spatial_auto,
 )
+from .auto._automatic import read_spatial
+from .auto._result import SpatialDataset, SpatialReadResult
 
 __all__ = [
+    "read_spatial",
+    "SpatialReadResult",
+    "SpatialDataset",
     "read_visium",
     "read_xenium",
     "read_atera",

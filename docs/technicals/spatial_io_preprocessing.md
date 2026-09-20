@@ -1,5 +1,7 @@
 # Spatial IO and preprocessing
 
+For the new score-free, contract-based input API, see [automatic spatial reading](automatic_spatial_reading.md). The legacy automatic reader below remains compatible.
+
 ## Unified public interfaces
 
 The maintained implementations now live directly under `spateo.io` and `spateo.preprocessing`; the former duplicate IO modules and the temporary `protocol_io`/`protocol_pipeline` namespaces have been removed.

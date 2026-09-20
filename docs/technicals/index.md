@@ -9,5 +9,8 @@ implementations in a more technical point of view.
 cell_segmentation
 digitization
 spatial_io_preprocessing
+automatic_spatial_reading
+automatic_spatial_reading_zh
+automatic_spatial_reading_validation
 serial_slice_quality_control
 ```

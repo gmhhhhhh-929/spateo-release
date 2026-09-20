@@ -107,3 +107,19 @@ It is important to keep the submodule up to date with the main repository and th
    git push
    ```
 Once you finish the above, check the link directory (something like spateo-tutorials @ 8e372ee) under the `docs` folder to make sure the related commit (such as 8e372ee) is the same as the latest one in the spateo-tutorials repository. If not, you may need to redo the above procedure again. 
+
+## Automatic spatial reading without score thresholds
+
+```python
+import spateo as st
+
+result = st.io.read_spatial("/path/to/dataset")
+print(result.status)
+adata = result.adata  # Exactly one complete input; inspect result.datasets for collections.
+```
+
+The new entry point validates core file structures, identifiers and coordinates,
+keeps distinct samples/resolutions as named results, and reports failures or
+deferred loads explicitly. Existing `read_auto_spatial` and platform readers stay
+compatible. See the [technical guide](docs/technicals/automatic_spatial_reading.md)
+and [完整中文说明](docs/technicals/automatic_spatial_reading_zh.md).

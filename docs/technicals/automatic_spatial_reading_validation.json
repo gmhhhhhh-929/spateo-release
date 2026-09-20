@@ -1,0 +1,52 @@
+{
+  "dataset": "V1_Adult_Mouse_Brain",
+  "source_url": "https://www.10xgenomics.com/datasets/mouse-brain-section-coronal-1-standard-1-1-0",
+  "shape": [
+    2702,
+    32285
+  ],
+  "nnz": 16031101,
+  "total_umi": 85825294,
+  "dtype": "int32",
+  "status": "ok",
+  "policy_version": "spatial-contracts-v1",
+  "checks": {
+    "all_matrix_values": "passed",
+    "all_barcodes_and_order": "passed",
+    "all_gene_ids_and_symbols": "passed",
+    "all_xy_by_barcode": "passed",
+    "h5ad_matrix_obs_var_xy_images_scales_roundtrip": "passed"
+  },
+  "images": {
+    "V1_Adult_Mouse_Brain": {
+      "hires": [
+        2000,
+        1921,
+        3
+      ],
+      "lowres": [
+        600,
+        576,
+        3
+      ],
+      "spatial__aligned_fiducials.jpg": [
+        2000,
+        1921,
+        3
+      ]
+    }
+  },
+  "versions": {
+    "numpy": "1.26.4",
+    "pandas": "2.2.3",
+    "anndata": "0.10.9",
+    "scipy": "1.13.1",
+    "h5py": "3.11.0",
+    "pyarrow": "22.0.0"
+  },
+  "python": "3.10.21",
+  "core_sha256": {
+    "filtered_feature_bc_matrix.h5": "eb78379e02dcf48036abf05b67233e73ecb0d880787feb82f76ff16f6ce01eb3",
+    "spatial/tissue_positions_list.csv": "19be19741e7a7ec27615ebab4b2629273167b69efb5e4158af0ea92de3ff99ae"
+  }
+}
