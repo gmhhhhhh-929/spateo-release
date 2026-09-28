@@ -63,6 +63,14 @@ class SliceQCConfig:
     exclude_threshold: float = 0.64
     severe_domain_threshold: float = 0.78
     minimum_corrob_domains: int = 2
+    # Observable tissue-loss evidence is separate from the four-domain score.
+    # Set False to reproduce the historical broad protection/scoring behavior.
+    tissue_loss_enabled: bool = True
+    tissue_loss_min_fraction: float = 0.50
+    tissue_loss_min_geometry_fraction: float = 0.35
+    tissue_loss_min_reference_points: int = 20
+    capture_loss_min_counts_fraction: float = 0.50
+    capture_loss_min_genes_fraction: float = 0.30
     profile_genes: int = 3000
     mito_prefixes: tuple[str, ...] = (
         "MT-",
@@ -83,6 +91,42 @@ class SliceSeriesResult:
     provenance: dict[str, Any]
     profiles: Optional[np.ndarray] = None
     profile_genes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ReviewEvidenceTier:
+    """One calibrated evidence route for resolving a stage-1 review slice.
+
+    Tiers partition the review score interval. Exclude-enabled lower-score
+    tiers require progressively stronger evidence. A calibrated interval with
+    no safe incremental exclusion rule can be declared keep-only by setting
+    ``enable_exclude=False``. Tiers are evaluated in declared order and never
+    bypass two-sided-context or anatomical-protection guardrails.
+    """
+
+    name: str
+    min_score: float
+    max_score: Optional[float] = None
+    min_corroborating_domains: int = 2
+    severe_domain_threshold: float = 0.85
+    min_window_stability: float = 1.0
+    min_score_confidence: float = 0.90
+    window_detector_mode: str = "candidate"
+    enable_exclude: bool = True
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ReviewEvidenceTier":
+        return cls(
+            name=str(value["name"]),
+            min_score=float(value["min_score"]),
+            max_score=(None if value.get("max_score") is None else float(value["max_score"])),
+            min_corroborating_domains=int(value.get("min_corroborating_domains", 2)),
+            severe_domain_threshold=float(value.get("severe_domain_threshold", 0.85)),
+            min_window_stability=float(value.get("min_window_stability", 1.0)),
+            min_score_confidence=float(value.get("min_score_confidence", 0.90)),
+            window_detector_mode=str(value.get("window_detector_mode", "candidate")),
+            enable_exclude=bool(value.get("enable_exclude", True)),
+        )
 
 
 @dataclass
@@ -109,10 +153,23 @@ class HighConfidencePolicy:
     adaptive_severe_domain_threshold: float = 0.85
     adaptive_min_window_stability: float = 0.90
     adaptive_min_score_confidence: float = 0.90
+    review_exclusion_tiers: tuple[ReviewEvidenceTier, ...] = ()
+    enable_tissue_loss_resolver: bool = False
+    loss_min_confirming_windows: int = 2
     benchmark_summary: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "HighConfidencePolicy":
+        confirmations = value.get("loss_min_confirming_windows", 2)
+        try:
+            valid_confirmations = (not isinstance(confirmations, (bool, np.bool_))
+                                   and np.isfinite(float(confirmations))
+                                   and float(confirmations) >= 1
+                                   and float(confirmations).is_integer())
+        except (ValueError, TypeError):
+            valid_confirmations = False
+        if not valid_confirmations:
+            raise ValueError("loss_min_confirming_windows must be a positive integer, not a boolean or fractional count")
         fields = {
             "keep_max_score": float(value["keep_max_score"]),
             "exclude_min_score": float(value["exclude_min_score"]),
@@ -129,6 +186,11 @@ class HighConfidencePolicy:
             "adaptive_severe_domain_threshold": float(value.get("adaptive_severe_domain_threshold", 0.85)),
             "adaptive_min_window_stability": float(value.get("adaptive_min_window_stability", 0.90)),
             "adaptive_min_score_confidence": float(value.get("adaptive_min_score_confidence", 0.90)),
+            "review_exclusion_tiers": tuple(
+                ReviewEvidenceTier.from_mapping(item) for item in value.get("review_exclusion_tiers", ())
+            ),
+            "enable_tissue_loss_resolver": bool(value.get("enable_tissue_loss_resolver", False)),
+            "loss_min_confirming_windows": int(float(confirmations)),
             "benchmark_summary": dict(value.get("benchmark_summary", {})),
         }
         return cls(**fields)
@@ -169,6 +231,8 @@ def _natural_key(value: Any) -> tuple[Any, ...]:
 
 
 def _jsonable(value: Any) -> Any:
+    if isinstance(value, np.bool_):
+        return bool(value)
     if isinstance(value, float):
         return None if not math.isfinite(value) else value
     if isinstance(value, (np.integer,)):
@@ -311,7 +375,10 @@ def _matrix_row_sum(matrix: Union[np.ndarray, sparse.spmatrix]) -> np.ndarray:
 
 def _matrix_row_nnz(matrix: Union[np.ndarray, sparse.spmatrix]) -> np.ndarray:
     if sparse.issparse(matrix):
-        return np.asarray(matrix.getnnz(axis=1)).ravel().astype(float)
+        clean = matrix.tocsr(copy=True)
+        clean.sum_duplicates()
+        clean.eliminate_zeros()
+        return np.asarray(clean.getnnz(axis=1)).ravel().astype(float)
     return np.count_nonzero(matrix, axis=1).astype(float)
 
 
@@ -647,7 +714,15 @@ def _geometry_metrics(
     median_nn = float(np.median(positive)) if positive.size else float("nan")
     q95 = float(np.quantile(positive, 0.95)) if positive.size else float("nan")
     knn_tail = q95 / max(median_nn, EPS) - 1 if np.isfinite(median_nn) else float("nan")
-    area = _safe_hull_area(xy)
+    if config.tissue_loss_enabled:
+        # A bounding-box fallback invents a rotation-dependent area for a line.
+        # Invalid two-dimensional geometry is missing evidence, not a deficit.
+        try:
+            area = float(ConvexHull(xy).volume)
+        except Exception:
+            area = float("nan")
+    else:
+        area = _safe_hull_area(xy)
     components, largest = _component_metrics(xy, median_nn)
     centered = xy - np.mean(xy, axis=0)
     covariance = np.cov(centered.T) if n > 2 else np.eye(2)
@@ -704,6 +779,7 @@ def _sample_points(
         "x": np.asarray(x)[idx].astype(float).round(5).tolist(),
         "y": np.asarray(y)[idx].astype(float).round(5).tolist(),
         "depth": scaled.astype(float).round(5).tolist(),
+        "counts": _jsonable(np.asarray(total_counts)[idx].astype(float)),
     }
 
 
@@ -745,19 +821,27 @@ def _extract_one_file(
             order_map = {remap[key]: value for key, value in order_map.items()}
 
         resolved_layer, matrix, count_like = _choose_layer(adata, layer)
+        representation = str(adata.uns.get("blind_input_contract", {}).get("expression_representation", ""))
+        annotation_matrix = resolved_layer == "X" and "one-hot" in representation.lower()
         matrix_totals = _matrix_row_sum(matrix)
         matrix_genes = _matrix_row_nnz(matrix)
         observed_totals = _obs_metric(adata, ("total_counts", "nCounts", "nCount_RNA", "total_umi", "UMI_count"))
         observed_genes = _obs_metric(adata, ("n_genes_by_counts", "nGenes", "nFeature_RNA", "gene_count"))
         total_counts = (
             observed_totals
-            if observed_totals is not None and resolved_layer != "slice_qc_simulated_counts"
+            if observed_totals is not None and not count_like and resolved_layer != "slice_qc_simulated_counts"
             else matrix_totals
         )
         n_genes = (
             observed_genes
-            if observed_genes is not None and resolved_layer != "slice_qc_simulated_counts"
+            if observed_genes is not None and not count_like and resolved_layer != "slice_qc_simulated_counts"
             else matrix_genes
+        )
+        if annotation_matrix:
+            total_counts = np.full(adata.n_obs, np.nan)
+            n_genes = np.full(adata.n_obs, np.nan)
+        measured_capture = not annotation_matrix and (
+            count_like or (observed_totals is not None and observed_genes is not None)
         )
         mito = _obs_metric(adata, ("pct_counts_mt", "pMito", "percent_mito", "mito_ratio"))
         if mito is None and count_like:
@@ -808,10 +892,15 @@ def _extract_one_file(
             "count_like": bool(count_like),
             "depth_source": (
                 "obs"
-                if observed_totals is not None and resolved_layer != "slice_qc_simulated_counts"
+                if observed_totals is not None and not count_like and resolved_layer != "slice_qc_simulated_counts"
                 else resolved_layer
             ),
             "celltype_key": requested_celltype,
+            "expression_capture_available": not annotation_matrix,
+            "capture_loss_evidence_available": bool(measured_capture),
+            "expression_representation": representation or "selected expression matrix",
+            "obs_totals_match_selected_matrix": (bool(np.allclose(observed_totals, matrix_totals, equal_nan=True)) if observed_totals is not None else None),
+            "obs_genes_match_selected_matrix": (bool(np.allclose(observed_genes, matrix_genes, equal_nan=True)) if observed_genes is not None else None),
         }
         var_names = np.asarray(adata.var_names.astype(str))
         for position, slice_id in enumerate(ordered):
@@ -826,8 +915,8 @@ def _extract_one_file(
             else:
                 profile = np.asarray(bulk[position]).ravel().astype(float)
             detected = int(np.count_nonzero(profile))
-            median_total = float(np.nanmedian(stotal)) if stotal.size else float("nan")
-            median_genes = float(np.nanmedian(sgenes)) if sgenes.size else float("nan")
+            median_total = float(np.nanmedian(stotal)) if np.isfinite(stotal).any() else float("nan")
+            median_genes = float(np.nanmedian(sgenes)) if np.isfinite(sgenes).any() else float("nan")
             complexity_values = np.divide(sgenes, np.maximum(np.log1p(stotal), EPS))
             row = {
                 "slice_id": slice_id,
@@ -836,11 +925,11 @@ def _extract_one_file(
                 "slice_order_value": order_map.get(slice_id, float(position)),
                 "n_locations": int(idx.size),
                 "median_total_counts": median_total,
-                "mean_total_counts": (float(np.nanmean(stotal)) if stotal.size else float("nan")),
+                "mean_total_counts": (float(np.nanmean(stotal)) if np.isfinite(stotal).any() else float("nan")),
                 "median_n_genes": median_genes,
                 "zero_fraction": float(1.0 - np.nansum(sgenes) / max(idx.size * adata.n_vars, 1)),
                 "library_complexity": (
-                    float(np.nanmedian(complexity_values)) if complexity_values.size else float("nan")
+                    float(np.nanmedian(complexity_values)) if np.isfinite(complexity_values).any() else float("nan")
                 ),
                 "detected_genes": detected,
                 "detected_gene_fraction": float(detected / max(adata.n_vars, 1)),
@@ -855,6 +944,13 @@ def _extract_one_file(
                     categories.astype(str),
                     counts.astype(float),
                 )
+            row["expression_capture_available"] = not annotation_matrix
+            row["capture_loss_evidence_available"] = bool(measured_capture)
+            row["coordinate_valid_fraction"] = float(np.mean(np.isfinite(sx) & np.isfinite(sy)))
+            row["input_warning"] = "annotation_one_hot_no_capture_evidence" if annotation_matrix else ""
+            if annotation_matrix:
+                for key in ("median_total_counts", "mean_total_counts", "median_n_genes", "zero_fraction", "library_complexity", "detected_genes", "detected_gene_fraction", "median_pct_mito", "local_low_depth_fraction", "regional_low_depth_cluster_fraction"):
+                    row[key] = float("nan")
             output.metrics.append(row)
             output.point_samples[slice_id] = _sample_points(
                 slice_id,
@@ -864,7 +960,8 @@ def _extract_one_file(
                 config.max_points_per_slice_report,
                 config.random_seed,
             )
-            output.pseudobulk[slice_id] = (var_names, profile)
+            if not annotation_matrix:
+                output.pseudobulk[slice_id] = (var_names, profile)
         return output
     finally:
         if getattr(adata, "file", None) is not None:
@@ -877,7 +974,7 @@ def _align_profiles(
     max_genes: int,
     fixed_genes: Optional[Sequence[str]] = None,
 ) -> tuple[Optional[np.ndarray], tuple[str, ...]]:
-    if not pseudobulk:
+    if not pseudobulk or any(s not in pseudobulk for s in slice_order):
         return None, ()
     gene_sets = [set(map(str, pseudobulk[slice_id][0])) for slice_id in slice_order]
     common = set.intersection(*gene_sets) if gene_sets else set()
@@ -1074,6 +1171,97 @@ def _top_two_evidence(frame: pd.DataFrame, columns: Sequence[str]) -> np.ndarray
     return 0.65 * strongest + 0.35 * second
 
 
+def _bilateral_loss(values: np.ndarray, window: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Deficit relative to BOTH sides, never a target-inclusive reference.
+
+    The lower of the two side medians avoids interpreting a monotone taper as
+    an isolated trough. Missing/one-sided support remains NaN, not normality.
+    Fractions measure a local observation deficit, not known tissue damage.
+    """
+    values = np.asarray(values, dtype=float)
+    reference = np.full(len(values), np.nan)
+    available = np.zeros(len(values), dtype=bool)
+    half = window // 2
+    for i in range(len(values)):
+        left = values[max(0, i-half):i]
+        right = values[i+1:min(len(values), i+half+1)]
+        left = left[np.isfinite(left) & (left > 0)]
+        right = right[np.isfinite(right) & (right > 0)]
+        if left.size and right.size and np.isfinite(values[i]) and values[i] >= 0:
+            reference[i] = min(float(np.median(left)), float(np.median(right)))
+            available[i] = reference[i] > 0
+    loss = np.full(len(values), np.nan)
+    loss[available] = np.clip(1-values[available]/reference[available], 0, 1)
+    return loss, reference, available
+
+
+def _add_tissue_loss_evidence(out: pd.DataFrame, config: SliceQCConfig, window: int) -> pd.DataFrame:
+    """Add auditable, non-MAD-attenuated quantity/coverage loss evidence.
+
+    N, area and density are correlated descriptions (N = area*density), not
+    independent evidence domains. The route detects an isolated bilateral
+    deficit; it cannot diagnose uniformly degraded series or anatomical causes.
+    """
+    for name in ("tissue_loss_min_fraction", "tissue_loss_min_geometry_fraction",
+                 "capture_loss_min_counts_fraction", "capture_loss_min_genes_fraction"):
+        if not np.isfinite(getattr(config, name)) or not 0 < getattr(config, name) < 1:
+            raise ValueError(f"{name} must be finite and between zero and one")
+    if config.tissue_loss_min_reference_points < 2:
+        raise ValueError("tissue_loss_min_reference_points must be at least two")
+    def numeric(name: str) -> np.ndarray:
+        return pd.to_numeric(out.get(name, pd.Series(np.nan, index=out.index)), errors="coerce").to_numpy(float)
+    def declared(name: str) -> np.ndarray:
+        return out.get(name, pd.Series(False, index=out.index)).fillna(False).eq(True).to_numpy()
+    coordinate_ok = numeric("coordinate_valid_fraction")
+    coordinate_ok = ~np.isfinite(coordinate_ok) | (coordinate_ok >= 0.99)
+    values = {name: numeric(name) for name in ("n_locations", "hull_area", "cell_density",
+                                               "median_total_counts", "median_n_genes")}
+    measured = declared("capture_loss_evidence_available")
+    evidence = {}
+    for key, prefix in (("n_locations", "point"), ("hull_area", "area"), ("cell_density", "density"),
+                        ("median_total_counts", "capture_count"), ("median_n_genes", "capture_gene")):
+        trusted = coordinate_ok if key in {"n_locations", "hull_area", "cell_density"} else measured
+        v = np.where(trusted, values[key], np.nan)
+        if key in {"hull_area", "cell_density"}:
+            v = np.where(v > 0, v, np.nan)
+        loss, reference, available = _bilateral_loss(v, window)
+        out[f"{prefix}_loss_fraction"] = loss
+        out[f"{prefix}_loss_reference"] = reference
+        evidence[prefix] = (loss, reference, available)
+    point, area, density = (evidence[k] for k in ("point", "area", "density"))
+    geometry_available = point[2] & (point[1] >= config.tissue_loss_min_reference_points) & (area[2] | density[2])
+    geometry = (geometry_available & (point[0] >= config.tissue_loss_min_fraction)
+                & ((area[0] >= config.tissue_loss_min_geometry_fraction)
+                   | (density[0] >= config.tissue_loss_min_geometry_fraction)))
+    counts, genes = (evidence[k] for k in ("capture_count", "capture_gene"))
+    capture_available = measured & counts[2] & genes[2]
+    capture = (capture_available & (counts[0] >= config.capture_loss_min_counts_fraction)
+               & (genes[0] >= config.capture_loss_min_genes_fraction))
+    smooth = np.zeros(len(out), dtype=bool)
+    # Positive observed trajectory evidence, not merely absence of RNA damage.
+    # Endpoints are unidentifiable here; do not invent a taper reference.
+    for i in range(1, len(out)-1):
+        consistent = True
+        for key in ("n_locations", "hull_area"):
+            prev, focal, following = values[key][i-1:i+2]
+            consistent &= bool(np.isfinite([prev, focal, following]).all()
+                               and min(prev, focal, following) > 0
+                               and min(prev, following) <= focal <= max(prev, following))
+        smooth[i] = consistent and bool(coordinate_ok[i-1:i+2].all())
+    out["loss_evidence_version"] = "bilateral-v3"
+    loss_config_keys = ("tissue_loss_min_fraction", "tissue_loss_min_geometry_fraction",
+                        "tissue_loss_min_reference_points", "capture_loss_min_counts_fraction",
+                        "capture_loss_min_genes_fraction")
+    out["loss_evidence_config"] = json.dumps({key: getattr(config, key) for key in loss_config_keys}, sort_keys=True)
+    out["geometry_loss_available"] = geometry_available
+    out["capture_loss_available"] = capture_available
+    out["geometry_loss_candidate"] = geometry
+    out["capture_loss_candidate"] = capture
+    out["anatomy_smooth_taper_evidence"] = smooth
+    out["loss_evidence_context"] = np.where(point[2], "two_sided", "unavailable_or_one_sided")
+    return out
+
+
 def _score_metrics(
     metrics: pd.DataFrame,
     profiles: Optional[np.ndarray],
@@ -1084,6 +1272,13 @@ def _score_metrics(
     if window < 3 or window % 2 == 0:
         raise ValueError("window must be an odd integer >= 3")
     out = metrics.copy().reset_index(drop=True)
+    if config.tissue_loss_enabled:
+        out = _add_tissue_loss_evidence(out, config, window)
+    else:
+        # Explicit legacy mode must not retain stale new-rule permissions.
+        out["loss_evidence_version"] = "disabled"
+        out["geometry_loss_candidate"] = False
+        out["capture_loss_candidate"] = False
     support_window = min(9, len(out) if len(out) % 2 == 1 else len(out) - 1)
     support_window = max(support_window, 3)
     support_window = max(window, support_window)
@@ -1297,7 +1492,22 @@ def _score_metrics(
         & (holes < 0.30)
         & (expression < 0.35)
     )
-    out["partial_structure_protection"] = density_only | taper_like
+    if config.tissue_loss_enabled:
+        out["partial_structure_protection"] = (
+            (density_only | taper_like)
+            & out["anatomy_smooth_taper_evidence"].to_numpy()
+            & (expression < 0.32) & (damage < 0.38) & (continuity < 0.45)
+            & ~out["geometry_loss_candidate"].to_numpy()
+            & ~out["capture_loss_candidate"].to_numpy()
+        )
+        out["anatomical_protection_reason"] = np.where(
+            out["partial_structure_protection"],
+            "observed monotone point-count and area trajectory; no independent severe loss",
+            "no corroborated smooth-taper protection",
+        )
+    else:
+        out["partial_structure_protection"] = density_only | taper_like
+        out["anatomical_protection_reason"] = "legacy geometry-only / partial-structure heuristic"
     final_score = raw_score.copy()
     final_score[out["partial_structure_protection"].to_numpy()] = np.minimum(
         final_score[out["partial_structure_protection"].to_numpy()],
@@ -1309,12 +1519,12 @@ def _score_metrics(
     recommendations: list[str] = []
     reasons: list[str] = []
     domain_names = ["density", "expression", "damage", "continuity"]
+    metric_columns = [key for key in out.columns if key.endswith("_anomaly") and key != "quality_anomaly"]
     for i in range(len(out)):
         domain_values = dict(zip(domain_names, domains[i]))
         strong = [name for name, value in domain_values.items() if value >= 0.45]
         severe = [name for name, value in domain_values.items() if value >= config.severe_domain_threshold]
         expression_severe = expression[i] >= config.severe_domain_threshold
-        metric_columns = [key for key in out.columns if key.endswith("_anomaly") and key != "quality_anomaly"]
         severe_metric = max((float(out.loc[i, key]) for key in metric_columns), default=0.0) >= 0.75
         can_exclude = internal[i] and not bool(out.loc[i, "partial_structure_protection"])
         if can_exclude and (
@@ -1329,6 +1539,8 @@ def _score_metrics(
             or severe
             or severe_metric
             or bool(out.loc[i, "partial_structure_protection"])
+            or bool(out.loc[i, "geometry_loss_candidate"])
+            or bool(out.loc[i, "capture_loss_candidate"])
         ):
             recommendation = "review"
         else:
@@ -1339,7 +1551,11 @@ def _score_metrics(
         if severe:
             detail.append("severe: " + ", ".join(severe))
         if bool(out.loc[i, "partial_structure_protection"]):
-            detail.append("geometry-only/partial-structure protection applied")
+            detail.append(str(out.loc[i, "anatomical_protection_reason"]))
+        if bool(out.loc[i, "geometry_loss_candidate"]):
+            detail.append("bilateral tissue-quantity and coverage/density loss; confirmation pending")
+        if bool(out.loc[i, "capture_loss_candidate"]):
+            detail.append("bilateral measured count and gene-capture loss; confirmation pending")
         if not internal[i]:
             detail.append("endpoint: one-sided evidence only")
         if not detail:
@@ -1364,11 +1580,12 @@ def add_multiscale_exclusion_evidence(
     """Add auditable multi-window evidence for resolving near-boundary slices.
 
     The saved slice metric table is rescored independently at every requested
-    odd window width.  A window supports adaptive exclusion only when the
-    detector calls the slice ``exclude``, at least two evidence domains agree,
-    one domain is severe, two-sided context is available, and anatomical
-    partial-structure protection is inactive.  The original score and detector
-    call are not replaced.
+    odd window width. It stores the score, detector call, four domain scores,
+    context, and anatomical-protection state for every window. The legacy
+    ``supports_adaptive_exclusion`` flag still requires an ``exclude`` detector
+    call, but a calibrated tier may independently require candidate-level or
+    exclude-level detector support. The original score and detector call are
+    not replaced.
 
     This helper is deliberately separate from policy application so a future
     dataset- or technology-level calibration can lock the acceptable score and
@@ -1386,10 +1603,10 @@ def add_multiscale_exclusion_evidence(
     available_windows = sorted(
         {int(window) for window in windows if int(window) >= 3 and int(window) % 2 == 1 and int(window) <= len(metrics)}
     )
-    if not available_windows:
+    if not available_windows and len(metrics) >= 3:
         raise ValueError("windows must contain at least one odd width between 3 and the series length")
 
-    active_config = config or SliceQCConfig(window=available_windows[0])
+    active_config = config or SliceQCConfig(window=available_windows[0] if available_windows else 3)
     domain_columns = [
         "density_domain_score",
         "expression_domain_score",
@@ -1428,17 +1645,27 @@ def add_multiscale_exclusion_evidence(
                     "detector_call": str(scored.iloc[index]["recommendation"]),
                     "corroborating_domains": int(corroborating[index]),
                     "maximum_domain_score": float(max_domain[index]),
+                    "density_domain_score": float(domains.iloc[index]["density_domain_score"]),
+                    "expression_domain_score": float(domains.iloc[index]["expression_domain_score"]),
+                    "damage_domain_score": float(domains.iloc[index]["damage_domain_score"]),
+                    "continuity_domain_score": float(domains.iloc[index]["continuity_domain_score"]),
+                    "window_context": str(scored.iloc[index]["window_context"]),
+                    "partial_structure_protection": bool(scored.iloc[index]["partial_structure_protection"]),
                     "supports_adaptive_exclusion": bool(supported[index]),
+                    **{key: _jsonable(scored.iloc[index][key]) for key in scored.columns
+                       if key.endswith("_loss_fraction") or key.endswith("_loss_reference")
+                       or key in {"loss_evidence_version", "loss_evidence_config", "geometry_loss_candidate", "capture_loss_candidate",
+                                  "geometry_loss_available", "capture_loss_available", "loss_evidence_context",
+                                  "anatomy_smooth_taper_evidence"}},
                 }
             )
 
-    stacked_scores = np.vstack(score_matrix)
     out = metrics.copy()
     out["adaptive_windows_tested"] = "|".join(str(window) for window in available_windows)
-    out["adaptive_window_stability"] = np.mean(np.vstack(support_matrix), axis=0)
-    out["adaptive_exclude_call_fraction"] = np.mean(np.vstack(exclude_matrix), axis=0)
-    out["adaptive_min_score_across_windows"] = np.nanmin(stacked_scores, axis=0)
-    out["adaptive_median_score_across_windows"] = np.nanmedian(stacked_scores, axis=0)
+    out["adaptive_window_stability"] = np.mean(np.vstack(support_matrix), axis=0) if support_matrix else 0.0
+    out["adaptive_exclude_call_fraction"] = np.mean(np.vstack(exclude_matrix), axis=0) if exclude_matrix else 0.0
+    out["adaptive_min_score_across_windows"] = np.nanmin(np.vstack(score_matrix), axis=0) if score_matrix else np.nan
+    out["adaptive_median_score_across_windows"] = np.nanmedian(np.vstack(score_matrix), axis=0) if score_matrix else np.nan
     out["adaptive_window_details"] = [
         json.dumps(detail_by_slice[slice_id], ensure_ascii=False, separators=(",", ":")) for slice_id in slice_ids
     ]
@@ -1640,7 +1867,8 @@ def calculate_slice_quality(
     config = config or SliceQCConfig()
     with tempfile.TemporaryDirectory(prefix="spateo_slice_qc_") as tmp:
         path = Path(tmp) / "input.h5ad"
-        adata.write_h5ad(path)
+        # AnnData serialization may mutate string obs/var to categoricals.
+        adata.copy().write_h5ad(path)
         result = scan_h5ad_series(
             [path],
             config=config,
@@ -1998,6 +2226,263 @@ def evaluate_paired_simulation(
     return _jsonable(summary), paired.sort_values("slice_id", key=lambda series: series.map(_natural_key))
 
 
+def _validate_review_tiers(
+    tiers: Sequence[ReviewEvidenceTier],
+    keep_max_score: float,
+) -> None:
+    if tiers and abs(tiers[0].min_score - keep_max_score) > EPS:
+        raise ValueError("the first review evidence tier must start at keep_max_score")
+    names: set[str] = set()
+    previous_upper: Optional[float] = None
+    previous_tier: Optional[ReviewEvidenceTier] = None
+    detector_strength = {"ignore": 0, "candidate": 1, "exclude": 2}
+    for index, tier in enumerate(tiers):
+        if not tier.name or tier.name in names:
+            raise ValueError("review evidence tier names must be non-empty and unique")
+        names.add(tier.name)
+        if not keep_max_score <= tier.min_score <= 1:
+            raise ValueError("review evidence tier min_score must be between keep_max_score and 1")
+        if tier.max_score is not None and not tier.min_score < tier.max_score <= 1:
+            raise ValueError("review evidence tier max_score must be greater than min_score and at most 1")
+        if tier.min_corroborating_domains < 2 or tier.min_corroborating_domains > 4:
+            raise ValueError("review evidence tiers require between two and four corroborating domains")
+        for name, value in {
+            "severe_domain_threshold": tier.severe_domain_threshold,
+            "min_window_stability": tier.min_window_stability,
+            "min_score_confidence": tier.min_score_confidence,
+        }.items():
+            if not 0 <= value <= 1:
+                raise ValueError(f"review evidence tier {name} must be between 0 and 1")
+        if tier.window_detector_mode not in {"candidate", "exclude", "ignore"}:
+            raise ValueError("window_detector_mode must be candidate, exclude, or ignore")
+        if index > 0 and previous_upper is None:
+            raise ValueError("only the final review evidence tier may omit max_score")
+        if previous_upper is not None and abs(tier.min_score - previous_upper) > EPS:
+            raise ValueError("review evidence tiers must form contiguous score bands")
+        if previous_tier is not None:
+            if previous_tier.enable_exclude and not tier.enable_exclude:
+                raise ValueError("an exclude-enabled tier cannot precede a higher-score keep-only tier")
+            if not previous_tier.enable_exclude and not tier.enable_exclude:
+                raise ValueError("adjacent keep-only review tiers must be merged")
+            if previous_tier.enable_exclude:
+                lower_not_weaker = (
+                    previous_tier.min_corroborating_domains >= tier.min_corroborating_domains
+                    and previous_tier.severe_domain_threshold + EPS >= tier.severe_domain_threshold
+                    and previous_tier.min_window_stability + EPS >= tier.min_window_stability
+                    and previous_tier.min_score_confidence + EPS >= tier.min_score_confidence
+                    and detector_strength[previous_tier.window_detector_mode]
+                    >= detector_strength[tier.window_detector_mode]
+                )
+                lower_strictly_stronger = (
+                    previous_tier.min_corroborating_domains > tier.min_corroborating_domains
+                    or previous_tier.severe_domain_threshold > tier.severe_domain_threshold + EPS
+                    or previous_tier.min_window_stability > tier.min_window_stability + EPS
+                    or previous_tier.min_score_confidence > tier.min_score_confidence + EPS
+                    or detector_strength[previous_tier.window_detector_mode]
+                    > detector_strength[tier.window_detector_mode]
+                )
+                if not lower_not_weaker or not lower_strictly_stronger:
+                    raise ValueError(
+                        "each lower-score review tier must require strictly stronger evidence "
+                        "than the adjacent higher-score tier"
+                    )
+        previous_upper = tier.max_score
+        previous_tier = tier
+    if tiers and tiers[-1].max_score is not None:
+        raise ValueError("the final review evidence tier must have max_score=None")
+
+
+def _detector_mode_passes(call: str, mode: str, required: bool) -> bool:
+    if not required or mode == "ignore":
+        return True
+    if mode == "exclude":
+        return call == "exclude"
+    return call in {"review", "exclude"}
+
+
+def _evaluate_review_tier_row(
+    row: pd.Series,
+    tier: ReviewEvidenceTier,
+    *,
+    require_two_sided: bool,
+    require_detector_call: bool,
+) -> tuple[bool, float, list[str]]:
+    if not tier.enable_exclude:
+        return False, 0.0, ["calibrated keep-only score band"]
+    failed: list[str] = []
+    score = pd.to_numeric(pd.Series([row.get("quality_anomaly_score")]), errors="coerce").iloc[0]
+    if not np.isfinite(score) or float(score) < tier.min_score:
+        failed.append("score below tier floor")
+    if tier.max_score is not None and np.isfinite(score) and float(score) >= tier.max_score:
+        failed.append("score outside tier band")
+    call = str(row.get("recommendation", ""))
+    if not _detector_mode_passes(call, tier.window_detector_mode, require_detector_call):
+        failed.append("primary detector call does not support tier")
+    if require_two_sided and str(row.get("window_context", "")) != "two_sided":
+        failed.append("two-sided context unavailable")
+    if bool(row.get("partial_structure_protection", False)):
+        failed.append("partial/anatomical structure protection")
+    corroborating = pd.to_numeric(pd.Series([row.get("corroborating_domains")]), errors="coerce").iloc[0]
+    if not np.isfinite(corroborating) or int(corroborating) < tier.min_corroborating_domains:
+        failed.append("fewer than tier corroborating domains")
+    domain_values = pd.to_numeric(
+        pd.Series(
+            [
+                row.get("density_domain_score"),
+                row.get("expression_domain_score"),
+                row.get("damage_domain_score"),
+                row.get("continuity_domain_score"),
+            ]
+        ),
+        errors="coerce",
+    ).fillna(0.0)
+    if float(domain_values.max()) < tier.severe_domain_threshold:
+        failed.append("no domain reaches tier severity")
+    confidence = pd.to_numeric(pd.Series([row.get("score_confidence")]), errors="coerce").iloc[0]
+    if not np.isfinite(confidence) or float(confidence) < tier.min_score_confidence:
+        failed.append("insufficient score confidence")
+
+    try:
+        raw_details = row.get("adaptive_window_details", "[]")
+        details = json.loads(raw_details) if isinstance(raw_details, str) else list(raw_details)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        details = []
+    supported = 0
+    for detail in details:
+        window_score = pd.to_numeric(pd.Series([detail.get("score")]), errors="coerce").iloc[0]
+        window_ok = bool(np.isfinite(window_score) and float(window_score) >= tier.min_score)
+        window_ok &= _detector_mode_passes(
+            str(detail.get("detector_call", "")),
+            tier.window_detector_mode,
+            require_detector_call,
+        )
+        if require_two_sided:
+            window_ok &= str(detail.get("window_context", "")) == "two_sided"
+        window_ok &= not bool(detail.get("partial_structure_protection", False))
+        window_ok &= int(detail.get("corroborating_domains", 0)) >= tier.min_corroborating_domains
+        maximum_domain = pd.to_numeric(pd.Series([detail.get("maximum_domain_score")]), errors="coerce").iloc[0]
+        window_ok &= bool(np.isfinite(maximum_domain) and float(maximum_domain) >= tier.severe_domain_threshold)
+        supported += int(window_ok)
+    stability = supported / len(details) if details else 0.0
+    if stability + EPS < tier.min_window_stability:
+        failed.append("multi-window support below tier minimum")
+    return not failed, float(stability), failed
+
+
+def audit_review_evidence(
+    metrics: pd.DataFrame, tier: ReviewEvidenceTier
+) -> pd.DataFrame:
+    """Inspect a review band without granting it publication permission.
+
+    Reuses the complete production evidence checks, including every available
+    confirming window. A candidate may trade severity for corroboration and is
+    deliberately separate from the legacy monotonic publication validator.
+    Existing final calls and scores are preserved verbatim. Passing this audit
+    is experimental evidence, never certification or a final exclude action.
+    """
+    required = {"threshold_triage_call", "quality_anomaly_score", "recommendation",
+                "window_context", "partial_structure_protection", "corroborating_domains",
+                "score_confidence", "adaptive_window_details", "density_domain_score",
+                "expression_domain_score", "damage_domain_score", "continuity_domain_score"}
+    missing = required.difference(metrics.columns)
+    if missing:
+        raise ValueError(f"Review evidence audit requires columns: {sorted(missing)}")
+    if not tier.enable_exclude:
+        raise ValueError("Supply an enabled evidence candidate; keep-only short circuits are not evidence audits")
+    score = pd.to_numeric(metrics["quality_anomaly_score"], errors="coerce")
+    selected = metrics["threshold_triage_call"].eq("review") & score.ge(tier.min_score)
+    if tier.max_score is not None:
+        selected &= score.lt(tier.max_score)
+    out = metrics.loc[selected].copy(deep=True)
+    evaluated = [_evaluate_review_tier_row(row, tier, require_two_sided=True,
+                                         require_detector_call=True) for _, row in out.iterrows()]
+    out["evidence_audit_candidate"] = tier.name
+    out["evidence_audit_status"] = "experimental_not_certified"
+    out["evidence_audit_performed"] = True
+    out["evidence_candidate_passes"] = [item[0] for item in evaluated]
+    out["evidence_window_support"] = [item[1] for item in evaluated]
+    out["evidence_failed_conditions"] = [json.dumps(item[2]) for item in evaluated]
+    out["evidence_policy_permission"] = False
+    return out
+
+
+def _evaluate_tissue_loss_row(row: pd.Series, policy: HighConfidencePolicy) -> tuple[bool, str, str, str]:
+    """Resolve physically corroborated loss independently of the old score.
+
+    The primary window and one additional available scale must agree by
+    default. N, area and density are correlated measurements, not independent
+    domains. Neither the injected dose nor an intact focal slice is consulted.
+    """
+    def flag(value: Any) -> bool:
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+        if isinstance(value, str) and value.lower() in {"true", "false"}:
+            return value.lower() == "true"
+        raise ValueError("Loss evidence booleans must be explicitly typed; rescore the metrics")
+
+    required = {"loss_evidence_version", "loss_evidence_config", "geometry_loss_candidate", "capture_loss_candidate"}
+    defaults = SliceQCConfig()
+    config_keys = ("tissue_loss_min_fraction", "tissue_loss_min_geometry_fraction",
+                   "tissue_loss_min_reference_points", "capture_loss_min_counts_fraction",
+                   "capture_loss_min_genes_fraction")
+    expected_config = {key: getattr(defaults, key) for key in config_keys}
+    expected_config.update(policy.benchmark_summary.get("loss_config", {}))
+    def validate_config(item: Mapping[str, Any]) -> None:
+        try:
+            observed = json.loads(item["loss_evidence_config"])
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ValueError("Missing frozen loss configuration; rescore the metrics") from exc
+        if observed != expected_config:
+            raise ValueError("Scored loss configuration does not match the frozen policy; rescore with its thresholds")
+    if required.difference(row.index) or row.get("loss_evidence_version") != "bilateral-v3":
+        raise ValueError("Missing or incompatible loss evidence version; rescore with bilateral-v3")
+    validate_config(row)
+    try:
+        details = json.loads(row["adaptive_window_details"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Missing multiscale loss evidence; rescore the metrics") from exc
+    if not isinstance(details, list):
+        raise ValueError("Multiscale loss evidence must be a list")
+    windows = []
+    for item in details:
+        if not isinstance(item, dict) or required.difference(item) or item["loss_evidence_version"] != "bilateral-v3":
+            raise ValueError("Stale or incomplete window loss evidence; rescore the metrics")
+        validate_config(item)
+        window = int(item.get("window", 0))
+        if window < 3 or window % 2 != 1 or window in windows:
+            raise ValueError("Invalid or duplicate tissue-loss confirmation window")
+        windows.append(window)
+    primary_window = int(row.get("window_size", 3))
+    required_count = min(policy.loss_min_confirming_windows, len(details))
+    support = {}
+    routes = []
+    messages = []
+    for route in ("geometry", "capture"):
+        key = f"{route}_loss_candidate"
+        primary_candidate = flag(row[key])
+        passing_windows = [int(item["window"]) for item in details if flag(item[key])]
+        passed = bool(primary_candidate and primary_window in passing_windows
+                      and required_count > 0 and len(passing_windows) >= required_count)
+        support[route] = {"primary_window": primary_window, "primary_candidate": primary_candidate,
+                          "available": len(details), "required": required_count,
+                          "support": len(passing_windows), "windows": passing_windows, "passed": passed}
+        if passed:
+            routes.append(route)
+            if route == "geometry":
+                fields = ("point", "area", "density")
+            else:
+                fields = ("capture_count", "capture_gene")
+            changes = []
+            for field in fields:
+                value = pd.to_numeric(pd.Series([row.get(f"{field}_loss_fraction")]), errors="coerce").iloc[0]
+                if np.isfinite(value):
+                    changes.append(f"{field} deficit {value:.1%}")
+            messages.append(f"{route}: " + ", ".join(changes)
+                            + f"; primary and {len(passing_windows)}/{len(details)} available windows agree")
+    reason = "; ".join(messages) if routes else "No confirmed bilateral tissue/capture loss; missing evidence is not proof of quality"
+    return bool(routes), "+".join(routes), reason, json.dumps(support, separators=(",", ":"))
+
+
 def apply_high_confidence_policy(
     metrics: pd.DataFrame,
     policy: Union[HighConfidencePolicy, Mapping[str, Any]],
@@ -2027,8 +2512,27 @@ def apply_high_confidence_policy(
         raise ValueError("policy thresholds must satisfy 0 <= keep < exclude <= 1")
     if policy.unresolved_action not in {"withhold", "keep"}:
         raise ValueError("unresolved_action must be either 'withhold' or 'keep'")
-    adaptive_enabled = policy.adaptive_exclude_min_score is not None
-    if adaptive_enabled:
+    if (isinstance(policy.loss_min_confirming_windows, (bool, np.bool_))
+            or not isinstance(policy.loss_min_confirming_windows, (int, np.integer))
+            or policy.loss_min_confirming_windows < 1):
+        raise ValueError("loss_min_confirming_windows must be a positive integer")
+    tiered_enabled = bool(policy.review_exclusion_tiers)
+    legacy_adaptive_enabled = policy.adaptive_exclude_min_score is not None
+    if tiered_enabled:
+        _validate_review_tiers(policy.review_exclusion_tiers, policy.keep_max_score)
+        tiered_required = {
+            "corroborating_domains",
+            "score_confidence",
+            "adaptive_window_details",
+            "density_domain_score",
+            "expression_domain_score",
+            "damage_domain_score",
+            "continuity_domain_score",
+        }
+        tiered_missing = tiered_required.difference(metrics.columns)
+        if tiered_missing:
+            raise KeyError("tiered review policy requires multi-window evidence columns: " f"{sorted(tiered_missing)}")
+    elif legacy_adaptive_enabled:
         assert policy.adaptive_exclude_min_score is not None
         if not 0 <= policy.adaptive_exclude_min_score < policy.exclude_min_score:
             raise ValueError("adaptive exclude threshold must be lower than the standard exclude threshold")
@@ -2088,7 +2592,39 @@ def apply_high_confidence_policy(
     threshold_triage_call[(threshold_band == "exclude") & ~standard_exclude] = "review"
     review_queue = threshold_triage_call == "review"
     adaptive_exclude = np.zeros(len(out), dtype=bool)
-    if adaptive_enabled:
+    matched_tier = np.full(len(out), "", dtype=object)
+    matched_tier_stability = np.zeros(len(out), dtype=float)
+    tier_diagnostics: list[list[dict[str, Any]]] = [[] for _ in range(len(out))]
+    if tiered_enabled:
+        for index in np.flatnonzero(review_queue):
+            row = out.iloc[index]
+            for tier in policy.review_exclusion_tiers:
+                passed, stability, failed = _evaluate_review_tier_row(
+                    row,
+                    tier,
+                    require_two_sided=policy.require_two_sided,
+                    require_detector_call=policy.require_detector_call,
+                )
+                tier_diagnostics[index].append(
+                    {
+                        "tier": tier.name,
+                        "passed": bool(passed),
+                        "window_stability": float(stability),
+                        "failed": failed,
+                    }
+                )
+                score_in_band = bool(
+                    finite_score[index]
+                    and score[index] >= tier.min_score
+                    and (tier.max_score is None or score[index] < tier.max_score)
+                )
+                if score_in_band:
+                    matched_tier[index] = tier.name
+                    matched_tier_stability[index] = stability
+                    adaptive_exclude[index] = bool(policy.enable_exclude and tier.enable_exclude and passed)
+                    break
+        adaptive_exclude &= ~standard_exclude
+    elif legacy_adaptive_enabled:
         assert policy.adaptive_exclude_min_score is not None
         domain_values = (
             out[
@@ -2129,7 +2665,11 @@ def apply_high_confidence_policy(
             & (window_stability >= policy.adaptive_min_window_stability)
         )
         adaptive_exclude &= ~standard_exclude
-    publish_exclude = standard_exclude | adaptive_exclude
+    loss_results = ([_evaluate_tissue_loss_row(row, policy) for _, row in out.iterrows()]
+                    if policy.enable_tissue_loss_resolver else [(False, "", "disabled", "{}")] * len(out))
+    tissue_loss_exclude = np.array([item[0] and policy.enable_exclude for item in loss_results], dtype=bool)
+    publish_exclude = standard_exclude | adaptive_exclude | tissue_loss_exclude
+    publish_keep &= ~publish_exclude
     if np.any(publish_keep & publish_exclude):
         raise RuntimeError("High-confidence keep and exclude masks overlap")
 
@@ -2144,8 +2684,8 @@ def apply_high_confidence_policy(
         final_call = certified_call.copy()
         published = publish_keep | publish_exclude
     review_resolution = np.full(len(out), "not_applicable", dtype=object)
-    review_resolution[review_queue & adaptive_exclude] = "exclude"
-    review_resolution[review_queue & ~adaptive_exclude] = "keep" if policy.unresolved_action == "keep" else "withhold"
+    review_resolution[review_queue & publish_exclude] = "exclude"
+    review_resolution[review_queue & ~publish_exclude] = "keep" if policy.unresolved_action == "keep" else "withhold"
     confidence = np.zeros(len(out), dtype=float)
     confidence[publish_keep] = np.clip(
         (policy.keep_max_score - score[publish_keep]) / max(policy.keep_max_score, EPS),
@@ -2157,7 +2697,17 @@ def apply_high_confidence_policy(
         0,
         1,
     )
-    if adaptive_enabled and np.any(adaptive_exclude):
+    if tiered_enabled and np.any(adaptive_exclude):
+        primary_confidence = (
+            pd.to_numeric(out.loc[adaptive_exclude, "score_confidence"], errors="coerce")
+            .fillna(0.0)
+            .to_numpy(dtype=float)
+        )
+        confidence[adaptive_exclude] = np.minimum(
+            matched_tier_stability[adaptive_exclude],
+            primary_confidence,
+        )
+    elif legacy_adaptive_enabled and np.any(adaptive_exclude):
         assert policy.adaptive_exclude_min_score is not None
         confidence[adaptive_exclude] = np.minimum(
             pd.to_numeric(out.loc[adaptive_exclude, "adaptive_window_stability"], errors="coerce")
@@ -2191,6 +2741,12 @@ def apply_high_confidence_policy(
         "published exclude: near-boundary score resolved by severe corroborated multi-domain evidence "
         "stable across slice-window scales"
     )
+    if tiered_enabled:
+        for index in np.flatnonzero(adaptive_exclude):
+            reasons[index] = (
+                "published exclude: calibrated review tier "
+                f"{matched_tier[index]} passed its multi-domain and multi-window evidence gate"
+            )
 
     threshold_triage_reason = np.full(len(out), "score is inside the review interval", dtype=object)
     threshold_triage_reason[~finite_score] = "review: anomaly score is unavailable"
@@ -2205,7 +2761,25 @@ def apply_high_confidence_policy(
     )
 
     review_resolution_reason = np.full(len(out), "not applicable: stage-1 triage did not assign review", dtype=object)
-    if adaptive_enabled:
+    if tiered_enabled:
+        for index in np.flatnonzero(review_queue):
+            tier_name = str(matched_tier[index]) or "unmatched"
+            selected = next(
+                (item for item in tier_diagnostics[index] if item["tier"] == tier_name),
+                None,
+            )
+            if adaptive_exclude[index]:
+                review_resolution_reason[index] = (
+                    f"exclude after review fine screen: calibrated tier {tier_name} passed "
+                    "its score-band, multi-domain, multi-window, context, and protection checks"
+                )
+            else:
+                action = "keep" if policy.unresolved_action == "keep" else "withhold"
+                failures = selected["failed"] if selected is not None else ["no calibrated tier matched"]
+                review_resolution_reason[index] = f"{action} after review fine screen ({tier_name}): " + "; ".join(
+                    failures or ["exclusion gate not satisfied"]
+                )
+    elif legacy_adaptive_enabled:
         review_resolution_reason[review_queue & adaptive_exclude] = (
             "exclude after review fine screen: two-sided unprotected context, severe corroborated "
             "multi-domain evidence, and stable 3/5/7-window support"
@@ -2243,12 +2817,24 @@ def apply_high_confidence_policy(
             f"{action} after review: no second-stage fine-screen resolver is configured"
         )
 
+    for index in np.flatnonzero(tissue_loss_exclude):
+        reasons[index] = "published exclude: " + loss_results[index][2]
+        if review_queue[index]:
+            review_resolution_reason[index] = reasons[index]
+    # A window agreement is not a calibrated probability of correctness.
+    confidence[tissue_loss_exclude] = np.nan
+
     out["internal_recommendation"] = out["recommendation"].astype(str)
     out["threshold_band"] = pd.Series(threshold_band, dtype="string")
     out["threshold_triage_call"] = pd.Series(threshold_triage_call, dtype="string")
     out["threshold_triage_reason"] = threshold_triage_reason
     out["review_resolution"] = pd.Series(review_resolution, dtype="string")
     out["review_resolution_reason"] = review_resolution_reason
+    out["review_resolution_tier"] = pd.Series(matched_tier, dtype="string")
+    out["review_tier_window_stability"] = matched_tier_stability
+    out["review_tier_diagnostics"] = [
+        json.dumps(items, ensure_ascii=False, separators=(",", ":")) for items in tier_diagnostics
+    ]
     out["certified_call"] = pd.Series(certified_call, dtype="string")
     out["final_call"] = pd.Series(final_call, dtype="string")
     decision_basis = np.full(
@@ -2259,10 +2845,17 @@ def apply_high_confidence_policy(
     decision_basis[publish_keep | standard_exclude] = "independently_certified"
     if policy.unresolved_action == "keep":
         decision_basis[review_queue & ~adaptive_exclude] = "review_resolved_keep"
-    decision_basis[adaptive_exclude] = "adaptive_multidomain_resolution"
+    decision_basis[adaptive_exclude] = (
+        "tiered_multidomain_resolution" if tiered_enabled else "adaptive_multidomain_resolution"
+    )
+    decision_basis[tissue_loss_exclude] = "bilateral_tissue_loss_resolution"
     out["decision_basis"] = decision_basis
     out["standard_exclusion_gate"] = standard_exclude
     out["adaptive_exclusion_gate"] = adaptive_exclude
+    out["tissue_loss_exclusion_gate"] = tissue_loss_exclude
+    out["tissue_loss_route"] = [item[1] for item in loss_results]
+    out["tissue_loss_reason"] = [item[2] for item in loss_results]
+    out["tissue_loss_window_support"] = [item[3] for item in loss_results]
     out["publication_status"] = np.where(published, "published", "withheld")
     out["binary_confidence_margin"] = confidence
     out["binary_reason"] = reasons
@@ -2274,13 +2867,26 @@ def write_high_confidence_outputs(
     metrics: pd.DataFrame,
     policy: Union[HighConfidencePolicy, Mapping[str, Any]],
     output_dir: Union[str, Path],
+    *,
+    application_scope: str = "certified",
 ) -> dict[str, Any]:
     """Write auditable binary outputs, optionally with complete operational coverage."""
     if not isinstance(policy, HighConfidencePolicy):
         policy = HighConfidencePolicy.from_mapping(policy)
+    if policy.enable_tissue_loss_resolver and application_scope != "experimental_policy":
+        raise ValueError("The bilateral-v3 tissue-loss resolver requires experimental_policy scope; it is not certified")
     output_path = Path(output_dir).expanduser().resolve()
     output_path.mkdir(parents=True, exist_ok=True)
     applied = apply_high_confidence_policy(metrics, policy)
+    if application_scope not in {"certified", "new_input_unvalidated", "experimental_policy"}:
+        raise ValueError("Unknown binary application scope")
+    if application_scope in {"new_input_unvalidated", "experimental_policy"}:
+        applied["policy_gate_call"] = applied["certified_call"]
+        applied["policy_gate_basis"] = applied["decision_basis"]
+        applied["certified_call"] = pd.Series(pd.NA, index=applied.index, dtype="string")
+        applied["decision_basis"] = applied["decision_basis"].replace({"independently_certified": "frozen_policy_direct"})
+        applied["binary_reason"] = applied["binary_reason"].astype(str).str.replace("certified", "frozen_policy_gate", regex=False)
+    applied["application_scope"] = application_scope
     audit_path = output_path / "slice_quality_binary_audit.csv"
     calls_path = output_path / "slice_quality_binary_calls.csv"
     withheld_path = output_path / "slice_quality_withheld_audit.csv"
@@ -2296,17 +2902,27 @@ def write_high_confidence_outputs(
             "threshold_triage_reason",
             "review_resolution",
             "review_resolution_reason",
+            "review_resolution_tier",
+            "review_tier_window_stability",
+            "review_tier_diagnostics",
         ],
         errors="ignore",
     ).to_csv(calls_path, index=False)
     applied.loc[applied["publication_status"].eq("withheld")].to_csv(withheld_path, index=False)
     counts = applied["final_call"].value_counts(dropna=True).to_dict()
     certified = applied["decision_basis"].eq("independently_certified")
-    adaptive_resolved = applied["decision_basis"].eq("adaptive_multidomain_resolution")
+    adaptive_resolved = applied["decision_basis"].isin(
+        ["adaptive_multidomain_resolution", "tiered_multidomain_resolution", "bilateral_tissue_loss_resolution"]
+    )
     review_resolved_keep = applied["decision_basis"].eq("review_resolved_keep")
     operational_default = applied["decision_basis"].isin(["conservative_keep_default", "review_resolved_keep"])
     summary = {
         "schema_version": SCHEMA_VERSION,
+        "application_scope": application_scope,
+        "new_input_independently_validated": application_scope == "certified",
+        "policy_validation_scope": ("experimental_bilateral_loss_not_independently_certified" if policy.enable_tissue_loss_resolver else
+                                    "metric_stress_tests_only" if application_scope == "experimental_policy"
+                                    else "historical_policy_validation"),
         "policy": _jsonable(asdict(policy)),
         "n_slices": int(len(applied)),
         "published": int(applied["publication_status"].eq("published").sum()),
@@ -2317,12 +2933,13 @@ def write_high_confidence_outputs(
         "certified": int(certified.sum()),
         "standard_exclude": int(applied["standard_exclusion_gate"].sum()),
         "adaptive_exclude": int(applied["adaptive_exclusion_gate"].sum()),
+        "tissue_loss_exclude": int(applied["tissue_loss_exclusion_gate"].sum()),
         "adaptive_resolved": int(adaptive_resolved.sum()),
         "threshold_triage": {
             key: int(value) for key, value in applied["threshold_triage_call"].value_counts().to_dict().items()
         },
         "review_resolved_keep": int(review_resolved_keep.sum()),
-        "review_resolved_exclude": int(adaptive_resolved.sum()),
+        "review_resolved_exclude": int((applied["review_resolution"].eq("exclude")).sum()),
         "operational_default_keep": int(operational_default.sum()),
         "complete_binary": bool(policy.unresolved_action == "keep"),
         "enabled_directions": {
@@ -2330,6 +2947,11 @@ def write_high_confidence_outputs(
             "exclude": bool(policy.enable_exclude),
         },
         "interpretation": (
+            "Experimental bilateral loss is an independent exclusion route at any legacy score: "
+            "the primary window plus another available scale confirm a tissue-quantity deficit with "
+            "area/density corroboration, or measured count and gene-capture deficits. Normal anatomical "
+            "taper cannot veto this route. Retain means exclusion evidence was insufficient, not verified quality."
+            if policy.enable_tissue_loss_resolver else
             "Stage 1 assigns threshold-based keep/review/exclude triage. Stage 2 resolves only review rows "
             "with multiscale, multi-domain evidence and anatomical guardrails. Every public slice has one "
             "final keep/exclude action; decision_basis and the audit-only stage columns preserve the path."
