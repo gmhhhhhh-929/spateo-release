@@ -1,9 +1,5 @@
-"""Failures shared by bounded spatial format adapters."""
+"""Compatibility imports for shared spatial reader exceptions."""
 
+from .._errors import ContractError, ResourceDeferred
 
-class ContractError(ValueError):
-    """Required data cannot satisfy the selected format contract."""
-
-
-class ResourceDeferred(MemoryError):
-    """Reading would exceed the configured resource budget."""
+__all__ = ["ContractError", "ResourceDeferred"]

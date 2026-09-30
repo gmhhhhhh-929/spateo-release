@@ -1,0 +1,166 @@
+{
+  "date": "2026-09-30",
+  "base_commit": "d884216b2f030bcb5616b01a8f950d31e1e6d833",
+  "scope": "Independent domestic platform modules; automatic dispatcher delegates to their native cores.",
+  "platforms": {
+    "seekspace": {
+      "module": "spateo/io/spatial/_seekspace.py",
+      "public_reader": "st.io.read_seekspace",
+      "automatic_and_direct_exact": true,
+      "native_fixture_cases": 9
+    },
+    "bmkmanu": {
+      "module": "spateo/io/spatial/_bmkmanu.py",
+      "public_reader": "st.io.read_bmkmanu",
+      "automatic_and_direct_exact": true,
+      "native_fixture_cases": 9
+    },
+    "salus": {
+      "module": "spateo/io/spatial/_salus.py",
+      "public_reader": "st.io.read_salus",
+      "automatic_and_direct_exact": true,
+      "native_fixture_cases": 9
+    },
+    "singleron": {
+      "module": "spateo/io/spatial/_singleron.py",
+      "public_reader": "st.io.read_singleron",
+      "automatic_and_direct_exact": true,
+      "native_fixture_cases": 10
+    }
+  },
+  "independent_tests": {
+    "tests": 38,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 38,
+    "seconds": 2.753
+  },
+  "full_io_suite": {
+    "tests": 238,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 237,
+    "seconds": 3.806
+  },
+  "architecture_guard": "Recursive AST walk and runtime forbidden-auto spies passed for all four platforms and their shared local dependencies.",
+  "real_native_BMK": {
+    "accession": "GSM8816652",
+    "technology": "bmkmanu",
+    "input": "native MEX + barcodes_pos.tsv.gz + PNG",
+    "no_h5ad_input": true,
+    "automatic_and_direct_exact": true,
+    "platform_reader": "spateo.io.spatial._bmkmanu.read_core",
+    "direct_read_seconds": 3.666665832977742,
+    "shape": [
+      50970,
+      54752
+    ],
+    "matrix_dtype": "int64",
+    "source_matrix_header": "%%MatrixMarket matrix coordinate real general",
+    "source_entries_compared": 25239573,
+    "total_counts": 39824941,
+    "all_counts_exact": true,
+    "all_coordinates_exact": true,
+    "all_axis_ids_exact": true,
+    "per_gene_and_spot_totals_exact": true,
+    "h5ad_roundtrip_exact": true,
+    "images_loaded": {
+      "native_bmk": [
+        "he_roi_small.png"
+      ]
+    },
+    "read_seconds": 4.403712917002849,
+    "total_validation_seconds": 19.826570500037633,
+    "caveat": "One public native dataset; not a clinical accuracy or cross-platform benchmark.",
+    "runtime_import_was_verified_against_task_checkout": true
+  },
+  "code_quality": {
+    "compile": 0,
+    "isort": 0,
+    "black": 0,
+    "diff": 0
+  },
+  "make_check": {
+    "exit": 2,
+    "cause": "Existing unchanged isort formatting errors",
+    "baseline": [
+      {
+        "path": "tests/io/test_slideseq_stream.py",
+        "unchanged_from_base": true,
+        "sha256": "aa61044bdc6c47963e6ccb3d14dcc08e57aa92bce2735533547618a3bbe067ef"
+      },
+      {
+        "path": "tests/io/test_spatial_auto.py",
+        "unchanged_from_base": true,
+        "sha256": "70385e7b86fbdd85ff7a2d8d5bceb5c14e1fb8e575a17969c0651c2fedb4917f"
+      },
+      {
+        "path": "tests/preprocessing/test_tissue_loss_v3.py",
+        "unchanged_from_base": true,
+        "sha256": "ccbe534618d66263bd0a40209a2fc120f60670e5775254d89b8422c47e77bf57"
+      }
+    ]
+  },
+  "validation_iterations_notes": [
+    "An initial extracted shared-matrix refactor omitted the legacy _POS alias. Existing Visium regression tests caught it; the alias was restored before the final passing full suite.",
+    "An initial real-data command imported another editable checkout. The final audit explicitly set PYTHONPATH to this checkout and recorded the actual imported source.",
+    "An initial cross-route metadata comparison ran after write_h5ad had categorized repeated string columns in memory. The final audit compares the fresh reader objects before serialization without relaxing dtype or numeric checks.",
+    "Independent review reproduced a mixed-platform parent-directory regression in the explicit route. It now reports unmatched native directories as unclassified information in explicit_platform scope, preserving them in the report and AnnData provenance. Four regressions verify that unrelated platform discovery/parsing is not called. Automatic scope behavior remains strict."
+  ],
+  "limits": [
+    "New platform fixtures verify documented export contracts, not every commercial pipeline revision.",
+    "The full native production-data audit in this round covers BMKMANU; SeekSpace, Salus and CeleScope space use independent native-schema fixtures.",
+    "Test pass rate is not platform classification accuracy or sequencing accuracy."
+  ],
+  "tested_io_sha256": {
+    "spateo/io/__init__.py": "23ae81bda56164d508d00cdae08074b07952de48c95814ae5ca7eca08ee4f926",
+    "spateo/io/general/__init__.py": "12298e5edd2e8189475efb52ca4650ba1d14435b8255ff7bfe00ee2593378b0e",
+    "spateo/io/general/_serialization.py": "1cbe82e0a0e9d77fb8d9e6430563edcab64cdab2aee71a62afcddbbd0c44f01c",
+    "spateo/io/general/_tabular.py": "2d4f22b1f92efcd76713ac9e23ee324a7c2afd67ba5b63f28fd0c0f22be9da82",
+    "spateo/io/single/__init__.py": "2f100307e27a01e03c4883cb82caac0e4f5f76d697d01dcc14851163cf998e4f",
+    "spateo/io/single/_formats.py": "91f81dc777ed608d7d45581084eb4dace771a7b759cd458be2b622031b0065e5",
+    "spateo/io/single/_read.py": "717d0f779af6e14ca69c29e27eb95b395b1295b352524ed153f6583c42efc0ee",
+    "spateo/io/spatial/__init__.py": "c9d4252f31f85903a8139c7abb3871aa6c72943b0ad7e679fde94531196b8871",
+    "spateo/io/spatial/_assets.py": "75462a96dc153d451b1fb2b287d82cc605c828e558b56c8ecb47e51d65090458",
+    "spateo/io/spatial/_atera.py": "c55f4f77ffb6d8e6284b80d862c626dc80ed104fbedcc12d29442a4bb9d93de3",
+    "spateo/io/spatial/_bmkmanu.py": "a835caf663d520d68dc25794b1a76a7a9fa7710d79aec8cbfa68f4722c3d0d47",
+    "spateo/io/spatial/_domestic.py": "8e29d04b3a2b3d8f5ad479c1acb7a43a6cf411cb46b25e3c30e0198944f2700c",
+    "spateo/io/spatial/_errors.py": "032dc1263a778eaa283987ccb4ba87e23ee93c5660f14ed239ca92d0d5631df4",
+    "spateo/io/spatial/_geometry.py": "0e08302dcc6b0eeee1d5b9878ac9f965df3f14307dc661980a884412cccebc2e",
+    "spateo/io/spatial/_image.py": "63e10b90581e8913bb9641bf33779bb66f8e320839221c3bd78143e26112b07f",
+    "spateo/io/spatial/_layout.py": "b2969bea8a45341b763a9f38e914ef1e4cebb9ce49968bf05c6a3695becc70c7",
+    "spateo/io/spatial/_matrix.py": "cd6eef32161bb1c61ae79b0e3330a264776e380c18fff80decaa8bd121f5d276",
+    "spateo/io/spatial/_merfish.py": "bea8ba62e2d4ac3b1024e7cb15792f955e3d3c9789d568a3904abea94ed07e20",
+    "spateo/io/spatial/_nanostring.py": "d3d51697bae519549d8b30a55ed132cf0abf56bae78db3ced6d548e885e08191",
+    "spateo/io/spatial/_native_common.py": "6f986f48a359f8be7960ff933253778bfe4668834e6f2065091f191f71399c68",
+    "spateo/io/spatial/_native_readers.py": "6a0966444250aa44cd583ccff5888f6a0d249e0202bf53b4bddd0b48d1a324c2",
+    "spateo/io/spatial/_provenance.py": "5f57b1f4796a803e05f5a11b89831aab6afa62257b801e5de52ceb28f14110fd",
+    "spateo/io/spatial/_read_engine.py": "373a24700c27f9bdbf3343ade4247610bcc45c91c37fad849c54d2124a3aba00",
+    "spateo/io/spatial/_read_result.py": "d0d5b203e23f68f4f6cac03b5c28ae616306b3319cc048bb33b08daa91a72976",
+    "spateo/io/spatial/_recovery.py": "5e145e1c6799afe9afd3ad14d3ee9eecc4c2f93c1ae2e046868678f0d2163c6d",
+    "spateo/io/spatial/_salus.py": "891945f6e1e3185d2a126b724d48dbbc6b7c09e108f30c0eef3daa5d5375ea74",
+    "spateo/io/spatial/_seekspace.py": "e7bba83d5d3bbd4b09af887f3a99814ae6947b150d4148bd9fdba9dd1b355a44",
+    "spateo/io/spatial/_seqfish.py": "00b219934d96c4b20046f3762af46523dda170a9c24f68960b4891c46ecc5d35",
+    "spateo/io/spatial/_seqscope.py": "db8e7c6a2f169fa564097953816b8fa7419ef318a8642c46ae79ec1c31581a05",
+    "spateo/io/spatial/_singleron.py": "f324928fd768b090683f6fddfadc32e053b6459faea2c21f1f9609dbd5aae99d",
+    "spateo/io/spatial/_slideseq.py": "bce8651783d45e9e40aec62f72e3bb311c80ce3c6de2e041551ef333eadab8b1",
+    "spateo/io/spatial/_starmap_plus.py": "751dfc58faad24f5987cf2ab1ced578743c76dfe0b2e5f477e2a4df3ccc7bde6",
+    "spateo/io/spatial/_stereoseq.py": "5df508b8b66d144ced80f614a93b02862daad5b761408bcad9c23662d351cdbd",
+    "spateo/io/spatial/_utils.py": "3f8b5e2fc84b97379d6006f5ef45b885a1d54c2886260910c6b62d41d47f1857",
+    "spateo/io/spatial/_visium.py": "c4060ac8862fdaced73174655e4f75da4c81c8c1f12d92ed0b52e597f917fc53",
+    "spateo/io/spatial/_visium_hd.py": "5ebbfce8f90c7d75d6190998af3e6c3cef1620422eb59dc518ee4f0d766b0ca0",
+    "spateo/io/spatial/_xenium.py": "0523e68e0c26532fb2d82ac62bdf51e068747b14cf39539d2ef016d7708246b9",
+    "spateo/io/spatial/auto/__init__.py": "8a219c9a06d7df1859e734e783e0a817549a7637df6ceafab84c7acf0ae7911e",
+    "spateo/io/spatial/auto/_automatic.py": "c4c241d6a771053c60757cd793de971b6e6c983379d88190f2d42e08f320ac41",
+    "spateo/io/spatial/auto/_contracts.py": "5062d5eab4550e456279ccfa4500c2baebf87c6eaf641ccd4c3c960122fa6c4b",
+    "spateo/io/spatial/auto/_discovery.py": "fc106b47e4871d2802bd950d7b7149aa41f20a9c4155c89feadb4f1a06042932",
+    "spateo/io/spatial/auto/_domestic.py": "853699bacf363d22e24d0436694b17bfa55dfc07bd730b280be6e85805a4ae51",
+    "spateo/io/spatial/auto/_errors.py": "6df3b47520ee39fe97369e847686bb2ee0f99e504cd340b6f3f453dd9292f133",
+    "spateo/io/spatial/auto/_formats.py": "3ee5f45f43d4deed3fb736f0fc2c8cecfa9faba38b1df66e0914efb26c641f50",
+    "spateo/io/spatial/auto/_recovery.py": "0aa4ead90edee086ea4ba77378a1b8ab890f71b94d0cf5905b0b76363c18beba",
+    "spateo/io/spatial/auto/_result.py": "dbe0c2bf2d69c906c2d4af1fa593493019ccf1c0616cc5989e093bf8d4ba4d4c",
+    "spateo/io/spatial/auto/_stereo.py": "53f03608a8317d19fd6674301f04c81eb13aa639f6feca4788cdf00fd23ffb23"
+  }
+}

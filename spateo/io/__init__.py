@@ -36,8 +36,8 @@ from .spatial import (
     spatial_file_manifest,
     write_visium_hd_cellseg,
 )
+from .spatial._read_result import SpatialDataset, SpatialReadResult
 from .spatial.auto._automatic import read_spatial
-from .spatial.auto._result import SpatialDataset, SpatialReadResult
 
 __all__ = [
     "read_spatial",

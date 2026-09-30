@@ -104,11 +104,15 @@ gzip -t barcodes_pos.tsv.gz
 
 ## 代码定位与核实来源
 
-- `spateo/io/spatial/_domestic.py`：四个公开直接接口。
-- `spateo/io/spatial/auto/_domestic.py`：原生格式发现、字段、计数及坐标约束。
-- `_discovery.py` / `_contracts.py`：统一发现及严格核心读取。
-- `_automatic.py` / `_result.py`：调度、资源预算、lazy 状态及结果集合。
-- `_recovery.py`：缺失路径、异常类别、恢复动作和来源链接。
+2026-09-30 的后续架构重构将每种国产技术拆为独立模块，详见 [独立 reader 与自动调度](domestic_reader_architecture_zh.md)。
+
+- `spateo/io/spatial/_seekspace.py`、`_bmkmanu.py`、`_salus.py`、`_singleron.py`：各平台的发现、字段解析、检查、核心读取与公开接口。
+- `spateo/io/spatial/_native_readers.py`：国产平台模块注册；自动层调用模块自身的发现/读取逻辑。
+- `spateo/io/spatial/_matrix.py` / `_native_common.py`：MEX/H5 存储验证、共同 ID 连接和计数规则。
+- `spateo/io/spatial/auto/_discovery.py` / `_contracts.py` / `_automatic.py`：全平台自动发现、验证调度与唯一解释决策。
+- `spateo/io/spatial/_read_engine.py` / `_read_result.py`：两条路线共享的执行、资源预算、lazy 状态和结果集合，不反向依赖自动层。
+- `spateo/io/spatial/_recovery.py`：缺失路径、异常类别、恢复动作和来源链接。
+- 原 `spatial/_domestic.py` 只保留兼容导出；直接 reader 不再调用自动入口。
 
 主证据为厂商或原论文作者的实际输出代码：
 
@@ -124,8 +128,8 @@ gzip -t barcodes_pos.tsv.gz
 
 复现单元/集成测试：`python -m pytest -q tests/io`。Skill 仓库另外提供源代码签名检查、CLI smoke 和真实使用任务测试。
 
-本次最终完整 IO 回归共 200 项：**199 通过、1 项真实 Visium 环境依赖测试跳过**；其中新增 76 项。公开 BMK 原生输入两次成功运行（一次完整验证、一次可复现脚本验证），均逐条核对 25,239,573 条矩阵记录，总计数 39,824,941。完整读取约4秒、每次读取加全量核对和往返约16秒，依赖本机环境，不是性能承诺。新增代码格式及编译通过；仓库整体 `make check` 遇到已有未修改文件的 isort/Black 格式问题，具体文件及与基线一致的 SHA-256 记录在验证 JSON 中。
+首轮国产平台实现（源码 `d884216`）的完整 IO 回归共 200 项：**199 通过、1 项真实 Visium 环境依赖测试跳过**；其中新增 76 项。公开 BMK 原生输入两次成功运行（一次完整验证、一次可复现脚本验证），均逐条核对 25,239,573 条矩阵记录，总计数 39,824,941。完整读取约4秒、每次读取加全量核对和往返约16秒，依赖本机环境，不是性能承诺。新增代码格式及编译通过；仓库整体 `make check` 遇到已有未修改文件的 isort/Black 格式问题，具体文件及与基线一致的 SHA-256 记录在验证 JSON 中。
 
 ```bash
-python scripts/verify_domestic_spatial_reading.py /data/native_GSM8816652 --output /output/new_validation_directory
+PYTHONPATH=. python scripts/verify_domestic_spatial_reading.py /data/native_GSM8816652 --output /output/new_validation_directory
 ```

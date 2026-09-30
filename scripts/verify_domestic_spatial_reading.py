@@ -71,6 +71,19 @@ np.testing.assert_array_equal(np.asarray(adata.X.sum(axis=1)).ravel(), obs_total
 np.testing.assert_array_equal(np.asarray(adata.X.sum(axis=0)).ravel(), var_totals)
 assert int(adata.X.sum()) == total
 
+direct_started = time.perf_counter()
+direct = st.io.read_bmkmanu(SOURCE, max_memory_bytes=4 * 1024**3)
+direct_seconds = time.perf_counter() - direct_started
+assert (direct.X != adata.X).nnz == 0
+pd.testing.assert_frame_equal(direct.obs, adata.obs)
+pd.testing.assert_frame_equal(direct.var, adata.var)
+np.testing.assert_array_equal(direct.obsm["spatial"], adata.obsm["spatial"])
+assert direct.uns["spateo_io"]["reader"] == adata.uns["spateo_io"]["reader"]
+for library, slot in adata.uns["spatial"].items():
+    for name, pixels in slot["images"].items():
+        np.testing.assert_array_equal(direct.uns["spatial"][library]["images"][name], pixels)
+# Compare two freshly read objects before write_h5ad, which can convert
+# repeated string columns to categorical in memory as part of serialization.
 output = OUT / "GSM8816652_BMK_native.h5ad"
 adata.write_h5ad(output)
 restored = anndata.read_h5ad(output)
@@ -85,6 +98,10 @@ checks = {
     "technology": "bmkmanu",
     "input": "native MEX + barcodes_pos.tsv.gz + PNG",
     "no_h5ad_input": True,
+    "automatic_and_direct_exact": True,
+    "platform_reader": adata.uns["spateo_io"]["reader"],
+    "imported_source": str(Path(st.__file__).resolve()),
+    "direct_read_seconds": direct_seconds,
     "shape": list(adata.shape),
     "matrix_dtype": str(adata.X.dtype),
     "source_matrix_header": header,

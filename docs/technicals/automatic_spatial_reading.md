@@ -14,6 +14,8 @@ For the detailed Chinese implementation report, see
 [自动空间数据读取：完整说明](automatic_spatial_reading_zh.md).
 For the 2026-09-30 native domestic-platform, lazy-loading and recovery update,
 see [国产平台 IO 与恢复说明](domestic_spatial_io_zh.md).
+The four domestic readers now own their native schemas in separate platform
+modules; see [independent reader architecture and validation](domestic_reader_architecture_zh.md).
 
 ## Quick start
 
@@ -92,6 +94,15 @@ do **not** call permissive legacy table readers, some of which coerce invalid
 values or fall back to row-order alignment. The actual adapter name is recorded
 in provenance. Direct platform readers remain available for broader legacy
 formats and optional analyses.
+
+For SeekSpace, BMKMANU, Salus and CeleScope space, automatic discovery and
+`_contracts` delegate to the corresponding `_seekspace.py`, `_bmkmanu.py`,
+`_salus.py` and `_singleron.py` modules. Their explicit `read_<technology>`
+functions execute independently of automatic detection. Both routes call the
+same platform `probe` and `read_core` functions, with generic matrix parsing,
+budgets, optional assets and outcome reporting shared below the automatic layer.
+Provenance records the actual platform `read_core` implementation. The former
+`spatial/_domestic.py` is only a compatibility export module.
 
 ## Stable result contract
 

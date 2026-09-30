@@ -1,14 +1,18 @@
 r"""I/O utilities for spatial omics datasets."""
 
 from ._atera import read_atera
-from ._domestic import read_bmkmanu, read_salus, read_seekspace, read_singleron
+from ._bmkmanu import read_bmkmanu
 from ._geometry import alpha_shape, get_concave_hull
 from ._image import add_image_layer, read_image
 from ._merfish import read_merfish
 from ._nanostring import read_nanostring
 from ._provenance import spatial_file_manifest
+from ._read_result import SpatialDataset, SpatialReadResult
+from ._salus import read_salus
+from ._seekspace import read_seekspace
 from ._seqfish import read_seqfish
 from ._seqscope import read_seqscope
+from ._singleron import read_singleron
 from ._slideseq import read_slideseq
 from ._starmap_plus import read_starmap_plus
 from ._stereoseq import read_bgi, read_bgi_agg, read_bgi_as_dataframe, read_stereoseq
@@ -32,12 +36,8 @@ from ._visium_hd import (
     write_visium_hd_cellseg,
 )
 from ._xenium import read_xenium
-from .auto import (
-    read_auto_spatial,
-    read_spatial_auto,
-)
+from .auto import read_auto_spatial, read_spatial_auto
 from .auto._automatic import read_spatial
-from .auto._result import SpatialDataset, SpatialReadResult
 
 __all__ = [
     "read_spatial",

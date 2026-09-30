@@ -1,143 +1,22 @@
-"""Automatic spatial reading driven by format contracts, without confidence scores."""
+"""Automatic layout selection delegates parsing to platform-native readers."""
 
 from __future__ import annotations
 
-import hashlib
-import json
-import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Union
 
-import numpy as np
-from PIL import Image
-
 from ...._registry import register_function
-from .._provenance import record_spatial_io
-from ._contracts import ContractError, ResourceDeferred, probe, read_core
-from ._discovery import discover, inventory
+from .._assets import load_assets
+from .._native_readers import DOMESTIC, get_reader
+from .._read_engine import run_reading
+from .._read_result import SpatialReadResult
+from ._contracts import probe, read_core
+from ._discovery import discover
 from ._formats import _canonical_technologies
-from ._recovery import required_paths
-from ._result import POLICY_VERSION, SpatialDataset, SpatialReadResult
 
 _DEFAULT_MEMORY = 1024**3
 _IMAGE_BUDGET = 32 * 1024**2
-
-
-def _diagnostic(code, message, severity="error", **extra):
-    return dict(code=code, message=str(message), severity=severity, **extra)
-
-
-def _assets(adata, candidate, enabled, budget, diagnostics):
-    """Optional raster failures never alter the core result or platform identity."""
-    slot = next(iter(adata.uns["spatial"].values()))
-    root = candidate.root
-    scales = root / "spatial/scalefactors_json.json"
-    if scales.is_file() and not scales.is_symlink():
-        try:
-            if scales.stat().st_size > 1024**2:
-                raise ValueError("Scale metadata exceeds size limit")
-            value = json.loads(scales.read_text())
-            if not isinstance(value, dict):
-                raise ValueError("Scale metadata is not an object")
-            for key, v in value.items():
-                if not isinstance(v, (int, float)) or isinstance(v, bool) or not np.isfinite(v) or v <= 0:
-                    raise ValueError(f"Invalid scale factor {key}")
-            slot["scalefactors"] = value
-        except (OSError, ValueError) as exc:
-            diagnostics.append(_diagnostic("optional_scale_error", exc, "warning", path=str(scales)))
-    files = []
-    # Bounded optional inventory; a directory is never recursively expanded here.
-    for folder in (root, root / "spatial", root / "images", root / "morphology_focus"):
-        if not folder.is_dir() or folder.is_symlink():
-            continue
-        try:
-            # Directory enumeration errors belong to optional assets, not core counts.
-            from itertools import islice
-
-            children = list(islice(folder.iterdir(), 1001))
-        except OSError as exc:
-            diagnostics.append(_diagnostic("optional_image_error", exc, "warning", path=str(folder)))
-            continue
-        for i, p in enumerate(children):
-            if i >= 1000:
-                diagnostics.append(
-                    _diagnostic("asset_inventory_limit", f"Optional inventory truncated at {folder}", "warning")
-                )
-                break
-            if (
-                not p.is_symlink()
-                and p.is_file()
-                and p.name.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff"))
-                and (
-                    not candidate.options.get("image_prefix")
-                    or p.name.startswith(str(candidate.options["image_prefix"]))
-                )
-            ):
-                files.append(p)
-    slot["image_files"] = {str(i): str(p.relative_to(root)) for i, p in enumerate(sorted(set(files)))}
-    slot["asset_status"] = {}
-    used = 0
-    image_priority = {"tissue_hires_image.png": 0, "tissue_lowres_image.png": 1}
-    for p in sorted(set(files), key=lambda p: (image_priority.get(p.name, 2), str(p))):
-        relative = p.relative_to(root).as_posix()
-        status = "not_requested"
-        if enabled:
-            try:
-                with Image.open(p) as im:
-                    estimated = (
-                        im.width
-                        * im.height
-                        * max(len(im.getbands()), 1)
-                        * (4 if im.mode in ("I", "F") else 2 if "16" in im.mode else 1)
-                    )
-                    if getattr(im, "n_frames", 1) > 1:
-                        status = "deferred_multiframe"
-                        diagnostics.append(
-                            _diagnostic(
-                                "optional_image_multiframe",
-                                "Multiframe raster retained by path",
-                                "warning",
-                                path=relative,
-                            )
-                        )
-                    elif estimated > min(_IMAGE_BUDGET, budget) - used:
-                        status = "deferred_resource"
-                        diagnostics.append(
-                            _diagnostic(
-                                "optional_image_resource_limit",
-                                "Raster exceeds remaining optional image budget",
-                                "warning",
-                                path=relative,
-                                estimated_bytes=estimated,
-                            )
-                        )
-                    else:
-                        key = {"tissue_hires_image.png": "hires", "tissue_lowres_image.png": "lowres"}.get(
-                            p.name, relative.replace("/", "__")
-                        )
-                        arr = np.asarray(im).copy()
-                        slot["images"][key] = arr
-                        used += arr.nbytes
-                        status = "loaded"
-            except Image.DecompressionBombError as exc:
-                status = "deferred_resource"
-                diagnostics.append(_diagnostic("optional_image_resource_limit", exc, "warning", path=relative))
-            except (OSError, ValueError) as exc:
-                status = "unreadable"
-                diagnostics.append(_diagnostic("optional_image_error", exc, "warning", path=relative))
-        slot["asset_status"][relative.replace("/", "__")] = status
-    if not files:
-        diagnostics.append(_diagnostic("optional_images_missing", "No optional raster assets found", "warning"))
-    # Images alone do not establish coordinate registration.
-    slot["metadata"]["image_registration"] = "scale_metadata_present" if slot["scalefactors"] else "not_established"
-    return used
-
-
-def _key(candidate, scope):
-    relative = candidate.root.relative_to(scope).as_posix()
-    base = f"{relative}::{candidate.representation}::{candidate.counts.name}"
-    return base
 
 
 def _resolve(candidates):
@@ -159,115 +38,27 @@ def _resolve(candidates):
     return None, "Multiple validated readers or companion encodings claim the same logical input"
 
 
-def _memory_used(result):
-    total = 0
-    for entry in result.datasets.values():
-        if entry.adata is not None:
-            a = entry.adata
-            total += a.X.data.nbytes + a.X.indices.nbytes + a.X.indptr.nbytes
-            total += sum(x.data.nbytes + x.indices.nbytes + x.indptr.nbytes for x in a.layers.values())
-            total += int(a.obs.memory_usage(deep=True).sum() + a.var.memory_usage(deep=True).sum())
-            total += sum(np.asarray(x).nbytes for x in a.obsm.values())
-            for slot in a.uns.get("spatial", {}).values():
-                total += sum(np.asarray(x).nbytes for x in slot.get("images", {}).values())
-    return total
+def _group_candidates(candidates):
+    groups = defaultdict(list)
+    domestic_counts = {c.counts for c in candidates if c.technology in DOMESTIC}
+    for c in candidates:
+        identity = c.identity
+        if c.counts in domestic_counts and c.technology in DOMESTIC | {"visium", "visium_hd_bin"}:
+            identity = str(c.counts), "domestic_native_matrix"
+        elif c.technology in ("visium", "visium_hd_bin"):
+            identity = str(c.root), c.representation
+        groups[identity].append(c)
+    return groups
 
 
-def _signature(candidate):
-    paths = [candidate.counts, candidate.metadata, candidate.root / "experiment.xenium"]
-    if candidate.counts.is_dir():
-        paths.extend(
-            candidate.counts / name
-            for name in (
-                "matrix.mtx",
-                "matrix.mtx.gz",
-                "features.tsv",
-                "features.tsv.gz",
-                "genes.tsv",
-                "genes.tsv.gz",
-                "barcodes.tsv",
-                "barcodes.tsv.gz",
-                "barcode.tsv",
-                "barcode.tsv.gz",
-                "matrix.tsv",
-                "matrix.tsv.gz",
-                "feature.tsv",
-                "feature.tsv.gz",
-            )
-        )
-    return tuple((str(p), p.stat().st_size, p.stat().st_mtime_ns) for p in sorted(set(paths)) if p.is_file())
+def _reader_name(candidate):
+    if candidate.technology in DOMESTIC:
+        return get_reader(candidate.technology).__name__ + ".read_core"
+    return "spateo.io.spatial.auto._contracts.read_core"
 
 
-def _load(entry, candidate, result, files, budget, load_images, reason, signature):
-    remaining = budget - _memory_used(result)
-    try:
-        if _signature(candidate) != signature:
-            raise ContractError("Source changed since discovery; call read_spatial again")
-        checks = probe(candidate, remaining)
-        entry.validation.update(checks)
-        entry.estimated_bytes = checks["estimated_bytes"]
-        if remaining <= 0 or entry.estimated_bytes > remaining:
-            raise ResourceDeferred("Estimated core allocation exceeds remaining collection memory budget")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            adata = read_core(candidate, remaining)
-            if _signature(candidate) != signature:
-                raise ContractError("Source changed during reading; no object returned")
-        entry.diagnostics.extend(_diagnostic("reader_warning", w.message, "warning") for w in caught)
-        entry.validation.update(content="passed", identifiers="complete", coordinates="finite", values="finite")
-        _assets(adata, candidate, load_images, max(0, remaining - entry.estimated_bytes), entry.diagnostics)
-        slot = next(iter(adata.uns["spatial"].values()))
-        asset_paths = [candidate.root / name for name in slot.get("image_files", {}).values()]
-        paths = sorted(set([p for p in files if p.is_relative_to(candidate.root)] + asset_paths))
-        manifest = {
-            "root": str(candidate.root),
-            "paths": [p.relative_to(candidate.root).as_posix() for p in paths],
-            "sizes_bytes": [p.stat().st_size for p in paths],
-            "truncated": not result.discovery["complete"],
-            "scope": "bounded core discovery plus optional raster inventory",
-        }
-        record_spatial_io(
-            adata,
-            technology=candidate.technology,
-            source=candidate.root,
-            reader="spateo.io.spatial.auto._contracts.read_core",
-            evidence=tuple(entry.evidence),
-            reader_kwargs={
-                "representation": candidate.representation,
-                "load_images": load_images,
-                **{k: v for k, v in candidate.options.items() if k.startswith("stereoseq_") and v is not None},
-            },
-            manifest=manifest,
-            format_status="preview-xenium-v4" if candidate.technology == "atera" else "validated_core",
-        )
-        adata.uns["spateo_io"].update(
-            policy_version=POLICY_VERSION,
-            resolution_reason=reason,
-            validation={k: v for k, v in entry.validation.items() if isinstance(v, (str, int, float, bool))},
-            warnings=[d["message"] for d in entry.diagnostics if d["severity"] == "warning"],
-        )
-        entry.adata, entry.status = adata, "ready"
-    except (ResourceDeferred, MemoryError) as exc:
-        entry.status = "deferred"
-        entry.diagnostics.append(_diagnostic("resource_deferred", exc, "warning"))
-    except Exception as exc:
-        # Do not swallow KeyboardInterrupt/SystemExit; isolate ordinary failures only.
-        entry.adata, entry.status = None, "failed"
-        entry.validation["content"] = "failed"
-        code = (
-            "source_changed"
-            if "Source changed" in str(exc)
-            else (
-                "dependency_missing"
-                if isinstance(exc, ImportError)
-                else (
-                    "permission_denied"
-                    if isinstance(exc, PermissionError)
-                    else "contract_error" if isinstance(exc, ContractError) else "read_error"
-                )
-            )
-        )
-        entry.diagnostics.append(_diagnostic(code, exc, exception_type=type(exc).__name__))
+def _assets(adata, candidate, enabled, budget, diagnostics):
+    return load_assets(adata, candidate, enabled, budget, diagnostics, image_budget=_IMAGE_BUDGET)
 
 
 @register_function(
@@ -321,174 +112,34 @@ def read_spatial(
     versions never determine chemistry. All input features are preserved.
     See ``docs/technicals/automatic_spatial_reading.md`` for supported contracts.
     """
-    if not isinstance(load, bool) or not isinstance(lazy, bool):
-        raise ValueError("load and lazy must be booleans")
-    if lazy and not load:
-        raise ValueError("Use either lazy=True or load=False, not both")
     if stereoseq_chemistry not in (None, "V1", "V2"):
         raise ValueError("stereoseq_chemistry must be V1, V2 or None")
     if stereoseq_bin_size is not None and (
         isinstance(stereoseq_bin_size, bool) or not isinstance(stereoseq_bin_size, int) or stereoseq_bin_size < 1
     ):
         raise ValueError("stereoseq_bin_size must be a positive integer")
-    if not isinstance(max_memory_bytes, int) or max_memory_bytes <= 0 or max_files <= 0 or max_depth < 0:
-        raise ValueError("Invalid memory/inventory/depth resource limits")
     allowed = _canonical_technologies(technology)
-    try:
-        requested = Path(path).expanduser().resolve()
-    except (OSError, RuntimeError) as exc:
-        result = SpatialReadResult(str(path))
-        result.diagnostics.append(
-            _diagnostic("source_unavailable", exc, path=str(path), exception_type=type(exc).__name__)
-        )
-        return result
-    result = SpatialReadResult(str(requested))
-    try:
-        exists = requested.exists()
-    except OSError as exc:
-        result.diagnostics.append(
-            _diagnostic("source_unavailable", exc, path=str(requested), exception_type=type(exc).__name__)
-        )
-        return result
-    if not exists:
-        result.diagnostics.append(_diagnostic("path_missing", f"Input path does not exist: {requested}"))
-        return result
-    files, roots, diagnostics = inventory(requested, max_files, max_depth)
-    result.diagnostics.extend(diagnostics)
-    result.discovery = {
-        "load_mode": "lazy" if lazy else "eager" if load else "inspect",
-        "files_inspected": len(files),
-        "directories_inspected": len(roots),
-        "max_depth": max_depth,
-        "complete": not any(d["severity"] == "error" for d in diagnostics),
-        "symlinks_followed": False,
-    }
-    try:
-        all_candidates = discover(files, requested, diagnostics=result.diagnostics)
-    except (OSError, EOFError, UnicodeError, ValueError) as exc:
-        result.discovery["complete"] = False
-        result.diagnostics.append(
-            _diagnostic("discovery_error", exc, path=str(requested), exception_type=type(exc).__name__)
-        )
-        return result
-    result.discovery["complete"] = not any(d["severity"] == "error" for d in result.diagnostics)
-    for c in all_candidates:
-        if c.technology == "bgi":
-            c.options.update(stereoseq_bin_size=stereoseq_bin_size, stereoseq_chemistry=stereoseq_chemistry)
-    candidates = [c for c in all_candidates if allowed is None or c.technology in allowed]
-    result.discovery["technology_filter"] = technology
-    result.discovery["excluded_by_technology"] = len(all_candidates) - len(candidates)
-    if not candidates:
-        result.diagnostics.append(
-            _diagnostic("unsupported_layout", "No supported spatial core layout found; no generic reader was guessed.")
-        )
-        return result
-    known_roots = {c.root for c in all_candidates}
-    for directory in sorted({p.parent for p in files}):
-        if any(directory.is_relative_to(root) for root in known_roots):
-            continue
-        if any(
-            p.parent == directory
-            and p.name.lower().endswith((".csv", ".csv.gz", ".parquet", ".h5", ".h5ad", ".gem", ".tsv"))
-            for p in files
-        ):
-            result.diagnostics.append(
-                _diagnostic(
-                    "unrecognized_input_directory",
-                    "Data-like files outside recognized inputs; no reader guessed",
-                    path=str(directory),
-                )
-            )
-    groups = defaultdict(list)
-    from ._domestic import DOMESTIC
 
-    domestic_counts = {c.counts for c in candidates if c.technology in DOMESTIC}
-    for c in candidates:
-        identity = c.identity
-        if c.counts in domestic_counts and c.technology in DOMESTIC | {"visium", "visium_hd_bin"}:
-            identity = str(c.counts), "domestic_native_matrix"
-        elif c.technology in ("visium", "visium_hd_bin"):
-            # Alternate matrix storage encodings are not assumed equivalent.
-            identity = str(c.root), c.representation
-        groups[identity].append(c)
-    scope = requested.parent if requested.is_file() else requested
-    for identity, alternatives in sorted(groups.items()):
-        first = alternatives[0]
-        key = _key(first, scope)
-        if key in result.datasets:
-            key += "::" + hashlib.sha256(repr(identity).encode()).hexdigest()[:8]
-        entry = SpatialDataset(key, first.technology, str(first.root), first.representation, lazy=lazy)
-        entry._memory_budget = max_memory_bytes
-        entry.required_files = sorted({p for c in alternatives for p in required_paths(c)})
-        result.datasets[key] = entry
-        valid, deferred, failures, probes = [], [], [], {}
-        for c in alternatives:
-            try:
-                checks = probe(c, max_memory_bytes)
-                valid.append(c)
-                probes[id(c)] = checks
-            except (ResourceDeferred, MemoryError) as exc:
-                deferred.append(c)
-                failures.append(_diagnostic("probe_deferred", exc, "warning", technology=c.technology))
-            except Exception as exc:
-                failures.append(
-                    _diagnostic(
-                        "probe_failed",
-                        exc,
-                        technology=c.technology,
-                        exception_type=type(exc).__name__,
-                        required_files=required_paths(c),
-                        missing_files=[p for p in required_paths(c) if not Path(p).is_file()],
-                    )
-                )
-        candidate, reason = (
-            _resolve(valid) if not deferred else (None, "Unprobed alternatives prevent a unique resolution")
-        )
-        entry.validation["candidate_diagnostics"] = failures
-        if candidate is None:
-            if len(alternatives) == 1 and deferred:
-                candidate = deferred[0]
-                reason = "Unique discovered layout; resource-bounded validation is still required"
-            else:
-                entry.status = "unresolved" if valid or deferred else "failed"
-                entry.evidence = [f"{c.technology}: {c.counts.name} + {c.metadata.name}" for c in alternatives]
-                entry.diagnostics = failures + [
-                    _diagnostic("unresolved_layout" if valid or deferred else "no_valid_contract", reason)
-                ]
-                continue
-        entry.technology = candidate.technology
-        entry.representation = candidate.representation
-        entry.source = str(candidate.root)
-        entry.required_files = required_paths(candidate)
-        if id(candidate) in probes:
-            entry.validation.update(probes[id(candidate)])
-            entry.estimated_bytes = probes[id(candidate)]["estimated_bytes"]
-        entry.evidence = candidate.evidence + (
-            [candidate.options["identity"]] if "identity" in candidate.options else []
-        )
-        entry.status = "deferred"
-        try:
-            signature = _signature(candidate)
-        except OSError as exc:
-            entry.status = "failed"
-            entry.diagnostics.append(_diagnostic("source_unavailable", exc))
-            continue
-        entry._loader = lambda e, limit, c=candidate, why=reason, sig=signature: _load(
-            e, c, result, files, limit or max_memory_bytes, load_images, why, sig
-        )
-        if load and not lazy:
-            entry.load()
-        else:
-            entry.validation.update(structure="passed" if candidate in valid else "deferred", content="not_loaded")
-            entry.diagnostics.append(
-                _diagnostic(
-                    "lazy_deferred" if lazy else "load_deferred",
-                    (
-                        "Core loading will occur on explicit materialization or unique result.adata access"
-                        if lazy
-                        else "Content loading was not requested"
-                    ),
-                    "info",
-                )
-            )
-    return result
+    def prepare(candidate):
+        if candidate.technology == "bgi":
+            candidate.options.update(stereoseq_bin_size=stereoseq_bin_size, stereoseq_chemistry=stereoseq_chemistry)
+
+    return run_reading(
+        path,
+        discover=discover,
+        probe=probe,
+        read_core=read_core,
+        reader_name=_reader_name,
+        technology=technology,
+        allowed=allowed,
+        load=load,
+        lazy=lazy,
+        load_images=load_images,
+        max_memory_bytes=max_memory_bytes,
+        max_files=max_files,
+        max_depth=max_depth,
+        prepare_candidate=prepare,
+        group_candidates=_group_candidates,
+        resolve=_resolve,
+        asset_loader=_assets,
+    )
