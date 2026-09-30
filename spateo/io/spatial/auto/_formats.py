@@ -79,6 +79,16 @@ _TECH_ALIASES = {
     "bgi": {"bgi"},
     "stereoseq": {"bgi"},
     "stereo": {"bgi"},
+    "seekspace": {"seekspace"},
+    "seekgene": {"seekspace"},
+    "bmkmanu": {"bmkmanu"},
+    "bmkmanus1000": {"bmkmanu"},
+    "s1000": {"bmkmanu"},
+    "biomarker": {"bmkmanu"},
+    "salus": {"salus"},
+    "salussts": {"salus"},
+    "singleron": {"singleron"},
+    "celescopespace": {"singleron"},
 }
 
 
@@ -100,6 +110,10 @@ def _canonical_technologies(technology: Optional[str]) -> Optional[set]:
         "merfish",
         "starmap_plus",
         "bgi",
+        "seekspace",
+        "bmkmanu",
+        "salus",
+        "singleron",
     }
     if technology in canonical:
         return {technology}

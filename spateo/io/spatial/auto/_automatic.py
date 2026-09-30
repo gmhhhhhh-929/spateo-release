@@ -14,9 +14,10 @@ from PIL import Image
 
 from ...._registry import register_function
 from .._provenance import record_spatial_io
-from ._formats import _canonical_technologies
 from ._contracts import ContractError, ResourceDeferred, probe, read_core
 from ._discovery import discover, inventory
+from ._formats import _canonical_technologies
+from ._recovery import required_paths
 from ._result import POLICY_VERSION, SpatialDataset, SpatialReadResult
 
 _DEFAULT_MEMORY = 1024**3
@@ -50,7 +51,15 @@ def _assets(adata, candidate, enabled, budget, diagnostics):
     for folder in (root, root / "spatial", root / "images", root / "morphology_focus"):
         if not folder.is_dir() or folder.is_symlink():
             continue
-        for i, p in enumerate(folder.iterdir()):
+        try:
+            # Directory enumeration errors belong to optional assets, not core counts.
+            from itertools import islice
+
+            children = list(islice(folder.iterdir(), 1001))
+        except OSError as exc:
+            diagnostics.append(_diagnostic("optional_image_error", exc, "warning", path=str(folder)))
+            continue
+        for i, p in enumerate(children):
             if i >= 1000:
                 diagnostics.append(
                     _diagnostic("asset_inventory_limit", f"Optional inventory truncated at {folder}", "warning")
@@ -60,6 +69,10 @@ def _assets(adata, candidate, enabled, budget, diagnostics):
                 not p.is_symlink()
                 and p.is_file()
                 and p.name.lower().endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff"))
+                and (
+                    not candidate.options.get("image_prefix")
+                    or p.name.startswith(str(candidate.options["image_prefix"]))
+                )
             ):
                 files.append(p)
     slot["image_files"] = {str(i): str(p.relative_to(root)) for i, p in enumerate(sorted(set(files)))}
@@ -80,8 +93,25 @@ def _assets(adata, candidate, enabled, budget, diagnostics):
                     )
                     if getattr(im, "n_frames", 1) > 1:
                         status = "deferred_multiframe"
+                        diagnostics.append(
+                            _diagnostic(
+                                "optional_image_multiframe",
+                                "Multiframe raster retained by path",
+                                "warning",
+                                path=relative,
+                            )
+                        )
                     elif estimated > min(_IMAGE_BUDGET, budget) - used:
                         status = "deferred_resource"
+                        diagnostics.append(
+                            _diagnostic(
+                                "optional_image_resource_limit",
+                                "Raster exceeds remaining optional image budget",
+                                "warning",
+                                path=relative,
+                                estimated_bytes=estimated,
+                            )
+                        )
                     else:
                         key = {"tissue_hires_image.png": "hires", "tissue_lowres_image.png": "lowres"}.get(
                             p.name, relative.replace("/", "__")
@@ -157,6 +187,12 @@ def _signature(candidate):
                 "genes.tsv.gz",
                 "barcodes.tsv",
                 "barcodes.tsv.gz",
+                "barcode.tsv",
+                "barcode.tsv.gz",
+                "matrix.tsv",
+                "matrix.tsv.gz",
+                "feature.tsv",
+                "feature.tsv.gz",
             )
         )
     return tuple((str(p), p.stat().st_size, p.stat().st_mtime_ns) for p in sorted(set(paths)) if p.is_file())
@@ -219,9 +255,17 @@ def _load(entry, candidate, result, files, budget, load_images, reason, signatur
         entry.adata, entry.status = None, "failed"
         entry.validation["content"] = "failed"
         code = (
-            "dependency_missing"
-            if isinstance(exc, ImportError)
-            else "contract_error" if isinstance(exc, ContractError) else "read_error"
+            "source_changed"
+            if "Source changed" in str(exc)
+            else (
+                "dependency_missing"
+                if isinstance(exc, ImportError)
+                else (
+                    "permission_denied"
+                    if isinstance(exc, PermissionError)
+                    else "contract_error" if isinstance(exc, ContractError) else "read_error"
+                )
+            )
         )
         entry.diagnostics.append(_diagnostic(code, exc, exception_type=type(exc).__name__))
 
@@ -242,6 +286,7 @@ def read_spatial(
     *,
     technology: Optional[str] = None,
     load: bool = True,
+    lazy: bool = False,
     load_images: bool = True,
     max_memory_bytes: int = _DEFAULT_MEMORY,
     max_files: int = 10000,
@@ -258,7 +303,14 @@ def read_spatial(
     and also return ``SpatialReadResult``. Direct platform readers are unchanged.
 
     Parameters beyond ``path`` are optional: ``technology`` restricts discovery;
-    ``load=False`` discovers/probes but defers content loading. Memory, inventory
+    ``load=False`` discovers/probes but defers content loading. ``lazy=True``
+    also defers core loading, but permits a unique ``result.adata`` access or an
+    explicit ``entry.materialize()`` to load on demand. These modes cannot be
+    combined. Lazy mode still reads bounded headers/metadata to resolve the
+    format; it is not backed AnnData or out-of-core matrix slicing. Failed or
+    resource-deferred lazy access is not retried implicitly. Use
+    ``entry.load(max_memory_bytes=..., retry=True)`` for an explicit retry.
+    Memory, inventory
     and depth limits are resource bounds, never statistical matching thresholds.
     ``max_memory_bytes`` is a conservative allocation budget, not an OS RSS cap.
     Entries exceeding it remain explicitly deferred and can be loaded later.
@@ -269,6 +321,10 @@ def read_spatial(
     versions never determine chemistry. All input features are preserved.
     See ``docs/technicals/automatic_spatial_reading.md`` for supported contracts.
     """
+    if not isinstance(load, bool) or not isinstance(lazy, bool):
+        raise ValueError("load and lazy must be booleans")
+    if lazy and not load:
+        raise ValueError("Use either lazy=True or load=False, not both")
     if stereoseq_chemistry not in (None, "V1", "V2"):
         raise ValueError("stereoseq_chemistry must be V1, V2 or None")
     if stereoseq_bin_size is not None and (
@@ -278,21 +334,44 @@ def read_spatial(
     if not isinstance(max_memory_bytes, int) or max_memory_bytes <= 0 or max_files <= 0 or max_depth < 0:
         raise ValueError("Invalid memory/inventory/depth resource limits")
     allowed = _canonical_technologies(technology)
-    requested = Path(path).expanduser().resolve()
+    try:
+        requested = Path(path).expanduser().resolve()
+    except (OSError, RuntimeError) as exc:
+        result = SpatialReadResult(str(path))
+        result.diagnostics.append(
+            _diagnostic("source_unavailable", exc, path=str(path), exception_type=type(exc).__name__)
+        )
+        return result
     result = SpatialReadResult(str(requested))
-    if not requested.exists():
+    try:
+        exists = requested.exists()
+    except OSError as exc:
+        result.diagnostics.append(
+            _diagnostic("source_unavailable", exc, path=str(requested), exception_type=type(exc).__name__)
+        )
+        return result
+    if not exists:
         result.diagnostics.append(_diagnostic("path_missing", f"Input path does not exist: {requested}"))
         return result
     files, roots, diagnostics = inventory(requested, max_files, max_depth)
     result.diagnostics.extend(diagnostics)
     result.discovery = {
+        "load_mode": "lazy" if lazy else "eager" if load else "inspect",
         "files_inspected": len(files),
         "directories_inspected": len(roots),
         "max_depth": max_depth,
         "complete": not any(d["severity"] == "error" for d in diagnostics),
         "symlinks_followed": False,
     }
-    all_candidates = discover(files, requested)
+    try:
+        all_candidates = discover(files, requested, diagnostics=result.diagnostics)
+    except (OSError, EOFError, UnicodeError, ValueError) as exc:
+        result.discovery["complete"] = False
+        result.diagnostics.append(
+            _diagnostic("discovery_error", exc, path=str(requested), exception_type=type(exc).__name__)
+        )
+        return result
+    result.discovery["complete"] = not any(d["severity"] == "error" for d in result.diagnostics)
     for c in all_candidates:
         if c.technology == "bgi":
             c.options.update(stereoseq_bin_size=stereoseq_bin_size, stereoseq_chemistry=stereoseq_chemistry)
@@ -321,9 +400,14 @@ def read_spatial(
                 )
             )
     groups = defaultdict(list)
+    from ._domestic import DOMESTIC
+
+    domestic_counts = {c.counts for c in candidates if c.technology in DOMESTIC}
     for c in candidates:
         identity = c.identity
-        if c.technology in ("visium", "visium_hd_bin"):
+        if c.counts in domestic_counts and c.technology in DOMESTIC | {"visium", "visium_hd_bin"}:
+            identity = str(c.counts), "domestic_native_matrix"
+        elif c.technology in ("visium", "visium_hd_bin"):
             # Alternate matrix storage encodings are not assumed equivalent.
             identity = str(c.root), c.representation
         groups[identity].append(c)
@@ -333,7 +417,9 @@ def read_spatial(
         key = _key(first, scope)
         if key in result.datasets:
             key += "::" + hashlib.sha256(repr(identity).encode()).hexdigest()[:8]
-        entry = SpatialDataset(key, first.technology, str(first.root), first.representation)
+        entry = SpatialDataset(key, first.technology, str(first.root), first.representation, lazy=lazy)
+        entry._memory_budget = max_memory_bytes
+        entry.required_files = sorted({p for c in alternatives for p in required_paths(c)})
         result.datasets[key] = entry
         valid, deferred, failures, probes = [], [], [], {}
         for c in alternatives:
@@ -346,7 +432,14 @@ def read_spatial(
                 failures.append(_diagnostic("probe_deferred", exc, "warning", technology=c.technology))
             except Exception as exc:
                 failures.append(
-                    _diagnostic("probe_failed", exc, technology=c.technology, exception_type=type(exc).__name__)
+                    _diagnostic(
+                        "probe_failed",
+                        exc,
+                        technology=c.technology,
+                        exception_type=type(exc).__name__,
+                        required_files=required_paths(c),
+                        missing_files=[p for p in required_paths(c) if not Path(p).is_file()],
+                    )
                 )
         candidate, reason = (
             _resolve(valid) if not deferred else (None, "Unprobed alternatives prevent a unique resolution")
@@ -364,6 +457,9 @@ def read_spatial(
                 ]
                 continue
         entry.technology = candidate.technology
+        entry.representation = candidate.representation
+        entry.source = str(candidate.root)
+        entry.required_files = required_paths(candidate)
         if id(candidate) in probes:
             entry.validation.update(probes[id(candidate)])
             entry.estimated_bytes = probes[id(candidate)]["estimated_bytes"]
@@ -380,9 +476,19 @@ def read_spatial(
         entry._loader = lambda e, limit, c=candidate, why=reason, sig=signature: _load(
             e, c, result, files, limit or max_memory_bytes, load_images, why, sig
         )
-        if load:
+        if load and not lazy:
             entry.load()
         else:
             entry.validation.update(structure="passed" if candidate in valid else "deferred", content="not_loaded")
-            entry.diagnostics.append(_diagnostic("load_deferred", "Content loading was not requested", "info"))
+            entry.diagnostics.append(
+                _diagnostic(
+                    "lazy_deferred" if lazy else "load_deferred",
+                    (
+                        "Core loading will occur on explicit materialization or unique result.adata access"
+                        if lazy
+                        else "Content loading was not requested"
+                    ),
+                    "info",
+                )
+            )
     return result

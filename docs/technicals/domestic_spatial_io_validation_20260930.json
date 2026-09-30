@@ -1,0 +1,254 @@
+{
+  "date": "2026-09-30",
+  "base_commit": "865cebbe665d2e488d55bdfb6a87bc2e7d2f3719",
+  "new_platforms": [
+    "seekspace",
+    "bmkmanu",
+    "salus",
+    "singleron"
+  ],
+  "final_io_suite": {
+    "tests": 200,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 199,
+    "warnings": 2,
+    "junit_seconds": 3.508
+  },
+  "new_tests": {
+    "domestic_native": 18,
+    "domestic_adversarial": 35,
+    "lazy_recovery": 23,
+    "total": 76
+  },
+  "rounds": {
+    "final_full_io_suite": 1,
+    "successful_public_native_reads": 2,
+    "development_iterations": "Incremental development and targeted runs are not independent accuracy trials."
+  },
+  "public_native_validation": {
+    "accession": "GSM8816652",
+    "technology": "bmkmanu",
+    "input": "native MEX + barcodes_pos.tsv.gz + PNG",
+    "no_h5ad_input": true,
+    "shape": [
+      50970,
+      54752
+    ],
+    "matrix_dtype": "int64",
+    "source_matrix_header": "%%MatrixMarket matrix coordinate real general",
+    "source_entries_compared": 25239573,
+    "total_counts": 39824941,
+    "all_counts_exact": true,
+    "all_coordinates_exact": true,
+    "all_axis_ids_exact": true,
+    "per_gene_and_spot_totals_exact": true,
+    "h5ad_roundtrip_exact": true,
+    "images_loaded": {
+      "native_bmk": [
+        "he_roi_small.png"
+      ]
+    },
+    "read_seconds": 4.087566833011806,
+    "total_validation_seconds": 15.895475999976043,
+    "caveat": "One public native dataset; not a clinical accuracy or cross-platform benchmark."
+  },
+  "reproducible_script_validation": {
+    "accession": "GSM8816652",
+    "technology": "bmkmanu",
+    "input": "native MEX + barcodes_pos.tsv.gz + PNG",
+    "no_h5ad_input": true,
+    "shape": [
+      50970,
+      54752
+    ],
+    "matrix_dtype": "int64",
+    "source_matrix_header": "%%MatrixMarket matrix coordinate real general",
+    "source_entries_compared": 25239573,
+    "total_counts": 39824941,
+    "all_counts_exact": true,
+    "all_coordinates_exact": true,
+    "all_axis_ids_exact": true,
+    "per_gene_and_spot_totals_exact": true,
+    "h5ad_roundtrip_exact": true,
+    "images_loaded": {
+      "native_bmk": [
+        "he_roi_small.png"
+      ]
+    },
+    "read_seconds": 4.404836041969247,
+    "total_validation_seconds": 16.255888333020266,
+    "caveat": "One public native dataset; not a clinical accuracy or cross-platform benchmark."
+  },
+  "public_download_manifest": {
+    "accession": "GSM8816652",
+    "series": "GSE290563",
+    "source": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM8816652",
+    "download_date": "2026-09-30",
+    "files": [
+      {
+        "file": "features.tsv.gz",
+        "source_name": "GSM8816652_wtirfeatures.tsv.gz",
+        "url": "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM8816nnn/GSM8816652/suppl/GSM8816652_wtirfeatures.tsv.gz",
+        "bytes": 413646,
+        "sha256": "e80111d047efff14821d8e702e96a9c920c5eb5bee053b805a65aefaa89e40d2",
+        "gzip_crc": "passed",
+        "uncompressed_bytes": 2347476
+      },
+      {
+        "file": "barcodes.tsv.gz",
+        "source_name": "GSM8816652_wtirbarcodes.tsv.gz",
+        "url": "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM8816nnn/GSM8816652/suppl/GSM8816652_wtirbarcodes.tsv.gz",
+        "bytes": 119902,
+        "sha256": "8b9b4f0f94b4665fd0dec963a2d0b4f39eba8e43556c228618f60298b08c39e5",
+        "gzip_crc": "passed",
+        "uncompressed_bytes": 464410
+      },
+      {
+        "file": "barcodes_pos.tsv.gz",
+        "source_name": "GSM8816652_wtirbarcodes_pos.tsv.gz",
+        "url": "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM8816nnn/GSM8816652/suppl/GSM8816652_wtirbarcodes_pos.tsv.gz",
+        "bytes": 768657,
+        "sha256": "4bbcea19cbb4e19cf56cfcf41f126cc4c1362dda3c2f8143fd1cbc6e81473508",
+        "gzip_crc": "passed",
+        "uncompressed_bytes": 2304466
+      },
+      {
+        "file": "matrix.mtx.gz",
+        "source_name": "GSM8816652_wtirmatrix.mtx.gz",
+        "url": "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM8816nnn/GSM8816652/suppl/GSM8816652_wtirmatrix.mtx.gz",
+        "bytes": 88753182,
+        "sha256": "7daee56bcaf845e9ad70f9f23ceeb0aea2d0b211d84fde9056b0bb3dec8c90a5",
+        "gzip_crc": "passed",
+        "uncompressed_bytes": 344042558
+      },
+      {
+        "file": "he_roi_small.png.gz",
+        "source_name": "GSM8816652_wtirhe_roi_small.png.gz",
+        "url": "https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM8816nnn/GSM8816652/suppl/GSM8816652_wtirhe_roi_small.png.gz",
+        "bytes": 2018196,
+        "sha256": "9de0b379828a084b616fb3722a03a56602c51711c5b16247910c533c1f3f9962",
+        "gzip_crc": "passed",
+        "uncompressed_bytes": 2023264
+      }
+    ],
+    "matrix_source_orientation": "genes_by_spots",
+    "native_format": "BSTMatrix level aggregate",
+    "no_h5ad_input": true,
+    "renaming": "Removed GEO GSM8816652_wtir prefix only; all gzip bytes unchanged"
+  },
+  "validation_notes": [
+    "Independent initial coordinate audit used pandas fast float parser, differing in 2/101940 values by at most 4.44e-16; switched the independent checker to Python float on original text. All coordinates then exactly matched, without changing source values or relaxing tolerance.",
+    "Source input gzip contents were unchanged; only GEO filename prefixes were removed.",
+    "One public BMK dataset does not establish production-data compatibility for the other three platforms. Their tests use verified schema fixtures.",
+    "199/199 executed final IO tests passed; one environment-dependent Visium integration test skipped. This is a test pass rate, not a platform classification accuracy."
+  ],
+  "quality_checks": {
+    "full_io": {
+      "tests": 200,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 199,
+      "warnings": 2,
+      "junit_seconds": 3.508
+    },
+    "compileall_exit": 0,
+    "make_check_exit": 2,
+    "baseline_isort_exit": 1,
+    "baseline_files": [
+      {
+        "path": "tests/io/test_slideseq_stream.py",
+        "worktree_equals_HEAD": true,
+        "sha256": "aa61044bdc6c47963e6ccb3d14dcc08e57aa92bce2735533547618a3bbe067ef"
+      },
+      {
+        "path": "tests/io/test_spatial_auto.py",
+        "worktree_equals_HEAD": true,
+        "sha256": "70385e7b86fbdd85ff7a2d8d5bceb5c14e1fb8e575a17969c0651c2fedb4917f"
+      },
+      {
+        "path": "tests/preprocessing/test_tissue_loss_v3.py",
+        "worktree_equals_HEAD": true,
+        "sha256": "ccbe534618d66263bd0a40209a2fc120f60670e5775254d89b8422c47e77bf57"
+      }
+    ],
+    "black_full_scope_exit": 1,
+    "changed_files_isort_exit": 0,
+    "changed_files": [
+      "spateo/io/__init__.py",
+      "spateo/io/spatial/__init__.py",
+      "spateo/io/spatial/_domestic.py",
+      "spateo/io/spatial/auto/_automatic.py",
+      "spateo/io/spatial/auto/_contracts.py",
+      "spateo/io/spatial/auto/_discovery.py",
+      "spateo/io/spatial/auto/_domestic.py",
+      "spateo/io/spatial/auto/_formats.py",
+      "spateo/io/spatial/auto/_recovery.py",
+      "spateo/io/spatial/auto/_result.py",
+      "tests/io/test_domestic_native.py",
+      "tests/io/test_domestic_review.py",
+      "tests/io/test_lazy_recovery.py",
+      "scripts/verify_domestic_spatial_reading.py"
+    ],
+    "baseline_black_exit": 1,
+    "baseline_black_files": [
+      {
+        "path": "tests/preprocessing/test_tissue_loss_v3.py",
+        "worktree_equals_HEAD": true,
+        "sha256": "ccbe534618d66263bd0a40209a2fc120f60670e5775254d89b8422c47e77bf57"
+      },
+      {
+        "path": "spateo/preprocessing/slice_quality.py",
+        "worktree_equals_HEAD": true,
+        "sha256": "82df2169ba32d5f2a01d5f4e588aab7b5c8821763e261450a5d946dc4c92fca2"
+      }
+    ],
+    "changed_files_black_exit": 0,
+    "diff_check_exit": 0
+  },
+  "environment": {
+    "python": "3.10.21",
+    "numpy": "1.26.4",
+    "scipy": "1.13.1",
+    "pandas": "2.2.3",
+    "anndata": "0.10.9"
+  },
+  "tested_io_sha256": {
+    "spateo/io/__init__.py": "ba8b47153b7bd9c450f7bfa9fd3a2f7242f9e93bedf4c0bf2d10f7c456b543ef",
+    "spateo/io/general/__init__.py": "12298e5edd2e8189475efb52ca4650ba1d14435b8255ff7bfe00ee2593378b0e",
+    "spateo/io/general/_serialization.py": "1cbe82e0a0e9d77fb8d9e6430563edcab64cdab2aee71a62afcddbbd0c44f01c",
+    "spateo/io/general/_tabular.py": "2d4f22b1f92efcd76713ac9e23ee324a7c2afd67ba5b63f28fd0c0f22be9da82",
+    "spateo/io/single/__init__.py": "2f100307e27a01e03c4883cb82caac0e4f5f76d697d01dcc14851163cf998e4f",
+    "spateo/io/single/_formats.py": "91f81dc777ed608d7d45581084eb4dace771a7b759cd458be2b622031b0065e5",
+    "spateo/io/single/_read.py": "717d0f779af6e14ca69c29e27eb95b395b1295b352524ed153f6583c42efc0ee",
+    "spateo/io/spatial/__init__.py": "1f4f685f9b31ca90da8fd86c0bf373693a6e607f14a92db62b5ff2e086dd1dd7",
+    "spateo/io/spatial/_atera.py": "c55f4f77ffb6d8e6284b80d862c626dc80ed104fbedcc12d29442a4bb9d93de3",
+    "spateo/io/spatial/_domestic.py": "e8f7ec1f3906a8bc4ced8967ececef290a529bb8f8eff9774d45274990fcac81",
+    "spateo/io/spatial/_geometry.py": "0e08302dcc6b0eeee1d5b9878ac9f965df3f14307dc661980a884412cccebc2e",
+    "spateo/io/spatial/_image.py": "63e10b90581e8913bb9641bf33779bb66f8e320839221c3bd78143e26112b07f",
+    "spateo/io/spatial/_merfish.py": "bea8ba62e2d4ac3b1024e7cb15792f955e3d3c9789d568a3904abea94ed07e20",
+    "spateo/io/spatial/_nanostring.py": "d3d51697bae519549d8b30a55ed132cf0abf56bae78db3ced6d548e885e08191",
+    "spateo/io/spatial/_provenance.py": "5f57b1f4796a803e05f5a11b89831aab6afa62257b801e5de52ceb28f14110fd",
+    "spateo/io/spatial/_seqfish.py": "00b219934d96c4b20046f3762af46523dda170a9c24f68960b4891c46ecc5d35",
+    "spateo/io/spatial/_seqscope.py": "db8e7c6a2f169fa564097953816b8fa7419ef318a8642c46ae79ec1c31581a05",
+    "spateo/io/spatial/_slideseq.py": "bce8651783d45e9e40aec62f72e3bb311c80ce3c6de2e041551ef333eadab8b1",
+    "spateo/io/spatial/_starmap_plus.py": "751dfc58faad24f5987cf2ab1ced578743c76dfe0b2e5f477e2a4df3ccc7bde6",
+    "spateo/io/spatial/_stereoseq.py": "5df508b8b66d144ced80f614a93b02862daad5b761408bcad9c23662d351cdbd",
+    "spateo/io/spatial/_utils.py": "3f8b5e2fc84b97379d6006f5ef45b885a1d54c2886260910c6b62d41d47f1857",
+    "spateo/io/spatial/_visium.py": "c4060ac8862fdaced73174655e4f75da4c81c8c1f12d92ed0b52e597f917fc53",
+    "spateo/io/spatial/_visium_hd.py": "5ebbfce8f90c7d75d6190998af3e6c3cef1620422eb59dc518ee4f0d766b0ca0",
+    "spateo/io/spatial/_xenium.py": "0523e68e0c26532fb2d82ac62bdf51e068747b14cf39539d2ef016d7708246b9",
+    "spateo/io/spatial/auto/__init__.py": "8a219c9a06d7df1859e734e783e0a817549a7637df6ceafab84c7acf0ae7911e",
+    "spateo/io/spatial/auto/_automatic.py": "e55cd30176477047b86b78136eb7ee36696e2aafbf6b8d00f31fe9915a2ec7be",
+    "spateo/io/spatial/auto/_contracts.py": "700e9e515d2284a56dc8e8b95c052266ddf3d1feb3a4c76d784141b51d6ae48b",
+    "spateo/io/spatial/auto/_discovery.py": "f6ade089bcb3ef0306b7094a68903a07fe9399cf3d68146779fa76d4c85f6f2d",
+    "spateo/io/spatial/auto/_domestic.py": "87bcfc332327f0b2121103f26f62fabf972331dd877ee3bcd76baa1fb041e8f0",
+    "spateo/io/spatial/auto/_errors.py": "032dc1263a778eaa283987ccb4ba87e23ee93c5660f14ed239ca92d0d5631df4",
+    "spateo/io/spatial/auto/_formats.py": "3ee5f45f43d4deed3fb736f0fc2c8cecfa9faba38b1df66e0914efb26c641f50",
+    "spateo/io/spatial/auto/_recovery.py": "fce1a04953cf869daaa63ba7359632d11fc04033a4c643857e52606cd14f4fe3",
+    "spateo/io/spatial/auto/_result.py": "ac29635373b43f40a5508b4d23db7575565def1e678df5a23c869ccd9479b4b4",
+    "spateo/io/spatial/auto/_stereo.py": "53f03608a8317d19fd6674301f04c81eb13aa639f6feca4788cdf00fd23ffb23"
+  }
+}

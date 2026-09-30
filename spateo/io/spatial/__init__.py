@@ -1,6 +1,7 @@
 r"""I/O utilities for spatial omics datasets."""
 
 from ._atera import read_atera
+from ._domestic import read_bmkmanu, read_salus, read_seekspace, read_singleron
 from ._geometry import alpha_shape, get_concave_hull
 from ._image import add_image_layer, read_image
 from ._merfish import read_merfish
@@ -40,6 +41,10 @@ from .auto._result import SpatialDataset, SpatialReadResult
 
 __all__ = [
     "read_spatial",
+    "read_seekspace",
+    "read_bmkmanu",
+    "read_salus",
+    "read_singleron",
     "SpatialReadResult",
     "SpatialDataset",
     "read_visium",

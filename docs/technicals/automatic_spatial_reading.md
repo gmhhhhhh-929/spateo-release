@@ -12,6 +12,8 @@ have been removed; use `read_spatial(path, load=False)` and inspect
 
 For the detailed Chinese implementation report, see
 [自动空间数据读取：完整说明](automatic_spatial_reading_zh.md).
+For the 2026-09-30 native domestic-platform, lazy-loading and recovery update,
+see [国产平台 IO 与恢复说明](domestic_spatial_io_zh.md).
 
 ## Quick start
 
@@ -73,7 +75,11 @@ not assumed equivalent: unresolved alternatives remain visible.
 | CosMx | Expression and metadata pairs, compound cell/FOV IDs and local pixel coordinates; optional global coordinates |
 | Slide-seq | Gene-by-bead expression table, named bead coordinates |
 | STARmap PLUS | Raw or processed expression and corresponding spatial tables with explicit IDs; supported TYPE declarations are parsed as schema |
-| Stereo-seq/BGI | GEM, or TSV/TXT with supported molecule-table header; native integer XY bins and total counts |
+| Stereo-seq/BGI V1/V2 | Supported GEM/GEM2 or native bin/cell GEF schemas; source chemistry is retained when supplied, not inferred from the container |
+| SeekSpace | MEX plus `cell_locations.tsv[.gz]` with `Cell_Barcode`, `X`, `Y` |
+| BMKMANU S1000 aggregate | MEX plus three-column headerless `barcodes_pos.tsv[.gz]`; raw five-column chip indices require upstream aggregation |
+| Salus STS workflow | MEX plus three-column headerless `spatial.txt[.gz]` |
+| CeleScope space | Spatial3-marked H5 plus `spatial/positions_list.csv`; no generic vendor inference from 10x storage alone |
 
 `obsm['spatial']` preserves a table's supported Z column when present. Visium
 coordinates remain column/row (X/Y) full-resolution pixels. Cellseg coordinates
@@ -140,6 +146,17 @@ count toward the collection's budget. Increase the budget explicitly when a
 large deferred input is known to fit, e.g. `entry.load(max_memory_bytes=4*1024**3)`.
 The implementation does not promise a backed reader for every format.
 
+`read_spatial(path, lazy=True)` defers full matrix loading until a unique
+`result.adata` is accessed or a selected `entry.materialize()` / `result.load(key)`
+is called. Reports and iteration do not load counts. This is deferred full
+materialization, not disk-backed slicing. `entry.adata` only holds an already
+loaded object. `load=False` remains inspection-only and is incompatible with
+`lazy=True`. A ready object is reused; resource deferral with the same budget
+does not repeatedly attempt loading. Failed reads require explicit `retry=True`;
+changed source files require rediscovery. The report adds concrete required
+paths and structured `recovery` actions with official help links, without
+inventing sample-specific download URLs or automatically changing files.
+
 The fixed input's size/modification metadata are checked around loading and
 before resuming a deferred load. If core inputs change, rediscover them with a
 new `read_spatial` call; this check is not a cryptographic content hash.
@@ -171,8 +188,9 @@ the collection report, not in fabricated object metadata.
 - Unknown or conflicting companion encodings are reported rather than resolved
   by filename order or an arbitrary score. Sample-specific directories may be
   passed directly when a collection is outside the bounded discovery scope.
-- No segmentation is inferred from molecule tables. BGI native XY bins are
-  explicitly bins, not cells; only total expression is read into the core matrix.
+- No segmentation is inferred from molecule tables. Stereo-seq XY bins remain
+  bins; cell outputs require supported native cell assignments. See the
+  [GEM/GEF and chemistry details](stereoseq_v1_v2_native_io_zh.md).
 - Optional transcript tables, cell-boundary collections, FOV composites,
   pyramidal imagery and transformations are not fully ingested by these strict
   core adapters. Use the appropriate legacy platform reader for these richer
@@ -182,6 +200,8 @@ the collection report, not in fabricated object metadata.
 - New table arrays may have different dtypes/metadata conventions from legacy
   readers. Core values and identifiers are preserved; byte-identical legacy
   AnnData objects are not promised. H5 count dtype and feature IDs are retained.
+  The four new domestic readers validate integer counts and use stable source
+  feature IDs as `var_names`, with display symbols retained in `var['gene_name']`.
 
 ## Reproducible validation
 

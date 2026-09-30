@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
-from ._formats import _canonical_technologies, _merfish_group, _normalize_token, _seqfish_role
+from ._formats import (
+    _canonical_technologies,
+    _merfish_group,
+    _normalize_token,
+    _seqfish_role,
+)
 
 _TABLE_SUFFIXES = (".csv", ".csv.gz", ".tsv", ".tsv.gz", ".txt", ".txt.gz", ".parquet")
 _SKIP_DIRS = {".git", "analysis", "images", "morphology_focus", "CellComposite", "CellLabels", "cell_boundaries"}
@@ -29,6 +34,8 @@ class Candidate:
     @property
     def identity(self):
         # Representations of one source are grouped independently from platform claims.
+        if self.technology in {"seekspace", "bmkmanu", "salus", "singleron"}:
+            return str(self.counts), "domestic_native_matrix"
         return str(self.counts), self.representation
 
 
@@ -96,17 +103,25 @@ def _one_or_expected(paths, expected):
     return sorted(paths) or [expected]
 
 
-def discover(files: List[Path], requested: Path, technology=None):
+def discover(files: List[Path], requested: Path, technology=None, diagnostics=None):
     """Keep incomplete layouts as candidates so missing core files are reported."""
+    from ._domestic import discover_domestic
+
     present = set(files)
     parents = sorted(
         {p.parent for p in files}
         | {p.parent.parent for p in files if p.parent.name in ("spatial", "filtered_feature_bc_matrix")}
     )
     allowed = _canonical_technologies(technology)
-    out = []
+    domestic = discover_domestic(files, requested)
+    domestic_counts = {c.counts for c in domestic}
+    out = [c for c in domestic if allowed is None or c.technology in allowed]
 
     def add(tech, root, counts, meta, rep, **options):
+        # A documented vendor-specific bundle specializes its shared matrix
+        # encoding; do not emit a second, incomplete Visium claim for it.
+        if tech in ("visium", "visium_hd_bin") and counts in domestic_counts and meta not in present:
+            return
         if allowed is not None and tech not in allowed:
             return
         if requested.is_file() and requested not in (counts, meta):
@@ -264,8 +279,17 @@ def discover(files: List[Path], requested: Path, technology=None):
                                     columns & {"MIDCount", "MIDCounts", "UMICount", "UMICounts", "count", "total"}
                                 )
                                 break
-                except (OSError, UnicodeError):
-                    pass
+                except (OSError, UnicodeError, EOFError) as exc:
+                    if diagnostics is not None:
+                        diagnostics.append(
+                            dict(
+                                code="discovery_error",
+                                severity="error",
+                                path=str(p),
+                                message=f"Cannot inspect table/gzip header: {exc}",
+                                exception_type=type(exc).__name__,
+                            )
+                        )
             if is_gem or p.suffix.lower() == ".gef":
                 add("bgi", root, p, p, "native_gef" if p.suffix.lower() == ".gef" else "native_gem")
     # Files in two valid storage encodings or companion variants remain visible.

@@ -7,10 +7,10 @@ Probes check structure only; ``read_core`` validates all core identifiers and va
 from __future__ import annotations
 
 import csv
-from array import array
 import gzip
 import json
 import re
+from array import array
 from pathlib import Path
 
 import h5py
@@ -22,8 +22,6 @@ from scipy.io import mminfo, mmread
 
 from ....configuration import SKM
 from ._discovery import Candidate
-
-
 from ._errors import ContractError, ResourceDeferred
 from ._stereo import probe_stereo, read_stereo_core
 
@@ -158,7 +156,7 @@ def _numeric(frame, context, *, nonnegative=False):
     return values
 
 
-def _h5(path, *, full=False, budget=512 * 1024**2):
+def _h5(path, *, full=False, budget=512 * 1024**2, technology=None):
     if not path.is_file():
         raise ContractError(f"Missing count matrix: {path}")
     with h5py.File(path, "r") as f:
@@ -195,11 +193,18 @@ def _h5(path, *, full=False, budget=512 * 1024**2):
         ):
             raise ContractError("Invalid sparse matrix indexing")
         _numeric(data, "H5 counts", nonnegative=True)
+        if technology is not None:
+            from ._domestic import integer_counts
+
+            data = integer_counts(data, technology)
         obs = _ids(g["barcodes"][:], "matrix barcodes")
         ids = _ids(g["features/id"][:], "feature IDs")
         names = [v.decode() if isinstance(v, bytes) else str(v) for v in g["features/name"][:]]
         X = sparse.csc_matrix((data, indices, ptr), shape=(n_genes, n_obs)).T.tocsr()
-        adata = AnnData(X, obs=pd.DataFrame(index=obs), var=pd.DataFrame({"gene_ids": ids}, index=names))
+        var = pd.DataFrame({"gene_ids": ids}, index=ids if technology else names)
+        if technology:
+            var["gene_name"] = names
+        adata = AnnData(X, obs=pd.DataFrame(index=obs), var=var)
         for src, dest in [("feature_type", "feature_types"), ("genome", "genome")]:
             if src in g["features"]:
                 if len(g["features"][src]) != n_genes:
@@ -215,8 +220,12 @@ def _h5(path, *, full=False, budget=512 * 1024**2):
         return adata
 
 
-def _mex(path, *, full=False, budget=512 * 1024**2):
+def _mex(path, *, full=False, budget=512 * 1024**2, technology=None):
     def find(stems):
+        if technology is not None:
+            found = [path / name for name in stems if (path / name).is_file()]
+            if len(found) > 1:
+                raise ContractError(f"Multiple alternative MEX files require an explicit choice: {found}")
         for name in stems:
             if (path / name).is_file():
                 return path / name
@@ -225,8 +234,7 @@ def _mex(path, *, full=False, budget=512 * 1024**2):
     matrix = find(("matrix.mtx.gz", "matrix.mtx"))
     barcodes = find(("barcodes.tsv.gz", "barcodes.tsv"))
     features = find(("features.tsv.gz", "features.tsv", "genes.tsv.gz", "genes.tsv"))
-    with gzip.open(matrix, "rb") if matrix.name.endswith(".gz") else matrix.open("rb") as f:
-        rows, cols, nnz, fmt, field, symmetry = mminfo(f)
+    rows, cols, nnz, fmt, field, symmetry = mminfo(matrix)
     if rows <= 0 or cols <= 0 or fmt != "coordinate" or symmetry != "general":
         raise ContractError("Unsupported Matrix Market structure")
     estimated = int(nnz * 40 + (rows + cols) * 1024)
@@ -241,14 +249,30 @@ def _mex(path, *, full=False, budget=512 * 1024**2):
     if len(obs) != cols or len(genes) != rows or any(len(g) < 2 for g in genes):
         raise ContractError("MEX matrix axes disagree with barcodes/features")
     ids = _ids([g[0] for g in genes], "MEX feature IDs")
-    with gzip.open(matrix, "rb") if matrix.name.endswith(".gz") else matrix.open("rb") as f:
-        X = mmread(f).T.tocsr()
+    raw = mmread(matrix)
+    # Validate before duplicate coordinates are coalesced: a negative entry must
+    # not be hidden by a positive entry at the same matrix location.
+    _numeric(raw.data, "raw MEX counts", nonnegative=True)
+    if technology is not None:
+        from ._domestic import integer_counts
+
+        raw.data = integer_counts(raw.data, technology)
+    X = raw.T.tocsr()
     _numeric(X.data, "MEX counts", nonnegative=True)
-    return AnnData(X, obs=pd.DataFrame(index=obs), var=pd.DataFrame({"gene_ids": ids}, index=[g[1] for g in genes]))
+    var = pd.DataFrame({"gene_ids": ids}, index=ids if technology else [g[1] for g in genes])
+    if technology:
+        var["gene_name"] = [g[1] for g in genes]
+    if all(len(g) >= 3 for g in genes):
+        var["feature_types"] = [g[2] for g in genes]
+    return AnnData(X, obs=pd.DataFrame(index=obs), var=var)
 
 
 def _meta(candidate, *, full=False, budget=512 * 1024**2):
+    from ._domestic import DOMESTIC, metadata
+
     tech = candidate.technology
+    if tech in DOMESTIC:
+        return metadata(candidate, full=full, budget=budget)
     if tech == "visium_hd_cellseg":
         from shapely.geometry import shape
 
@@ -382,6 +406,10 @@ def _slideseq_counts(path, *, full=False, budget=512 * 1024**2):
 def probe(candidate: Candidate, budget):
     """Bounded format checks; no ranking, inference of missing values, or IO writes."""
     tech = candidate.technology
+    from ._domestic import DOMESTIC
+
+    if candidate.representation == "raw_chip_indices":
+        _meta(candidate, budget=budget)
     for file in (candidate.counts, candidate.metadata):
         for part in [file, *file.parents]:
             if part == candidate.root:
@@ -399,7 +427,7 @@ def probe(candidate: Candidate, budget):
     elif candidate.counts.suffix == ".h5":
         result = _h5(candidate.counts)
     elif candidate.counts.is_dir():
-        result = _mex(candidate.counts)
+        result = _mex(candidate.counts, technology=tech if tech in DOMESTIC else None)
     else:
         head = table(candidate.counts, budget=budget)
         if head.shape[1] < 2:
@@ -452,6 +480,8 @@ def _table_counts(candidate, metadata_ids, budget):
 
 def read_core(candidate: Candidate, budget):
     """Read one resolved layout under strict, explicit platform contracts."""
+    from ._domestic import DOMESTIC, finish
+
     if candidate.technology == "bgi":
         adata = read_stereo_core(
             candidate.counts,
@@ -463,9 +493,19 @@ def read_core(candidate: Candidate, budget):
     else:
         meta, xy, units = _meta(candidate, full=True, budget=budget)
         if candidate.counts.suffix == ".h5":
-            adata = _h5(candidate.counts, full=True, budget=budget)
+            adata = _h5(
+                candidate.counts,
+                full=True,
+                budget=budget,
+                technology=candidate.technology if candidate.technology in DOMESTIC else None,
+            )
         elif candidate.counts.is_dir():
-            adata = _mex(candidate.counts, full=True, budget=budget)
+            adata = _mex(
+                candidate.counts,
+                full=True,
+                budget=budget,
+                technology=candidate.technology if candidate.technology in DOMESTIC else None,
+            )
         else:
             adata = _table_counts(candidate, meta.index, budget)
         missing = adata.obs_names[~adata.obs_names.isin(meta.index)]
@@ -474,6 +514,8 @@ def read_core(candidate: Candidate, budget):
         order = meta.index.get_indexer(adata.obs_names)
         adata.obs = meta.iloc[order].copy()
         adata.obsm["spatial"] = xy[order]
+        if candidate.technology in DOMESTIC:
+            finish(adata, candidate)
         if candidate.technology == "nanostring":
             try:
                 gx = _column(adata.obs, ("CenterX_global_px", "center_x_global_px", "x_global_px"))
