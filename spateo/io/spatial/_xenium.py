@@ -16,6 +16,7 @@ from ..._registry import register_function
 # spateo key
 from ...configuration import SKM
 from ..single import read_10x_h5
+from ._matrix import _ids
 from ._provenance import record_spatial_io, spatial_file_manifest
 
 try:
@@ -262,7 +263,7 @@ def read_xenium(
     Returns
     -------
     AnnData
-        - ``X``: CSR sparse, ``int32`` counts (cells × genes)
+        - ``X``: CSR sparse, source integer counts (cells × genes)
         - ``obs``: cell metadata from ``cells.csv.gz``
         - ``obsm['spatial']``: ``(n_obs, 2)`` cell centroids in **microns**
         - ``var``: gene panel metadata
@@ -322,7 +323,7 @@ def read_xenium(
         (c for c in ("cell_id", "cellID", "CellID", "cell_ID") if c in cells.columns),
         cells.columns[0],
     )
-    cells[id_col] = cells[id_col].astype(str)
+    cells[id_col] = _ids(cells[id_col], "Xenium cell metadata")
     cells = cells.set_index(id_col)
 
     # Match row order — the matrix and cells file come from the same pipeline so
@@ -330,12 +331,10 @@ def read_xenium(
     matrix_ids = pd.Index(adata.obs_names.astype(str))
     common = matrix_ids.intersection(cells.index)
     if len(common) != len(matrix_ids):
-        warnings.warn(
+        raise ValueError(
             f"{len(matrix_ids) - len(common)} cells in cell_feature_matrix.h5 are absent "
-            f"from cells metadata and will be dropped."
+            "from cells metadata; provide matching files from the same sample."
         )
-        adata = adata[adata.obs_names.astype(str).isin(common)].copy()
-        matrix_ids = pd.Index(adata.obs_names.astype(str))
     cells = cells.reindex(matrix_ids)
 
     xy_pairs = [("x_centroid", "y_centroid"), ("CenterX_local_px", "CenterY_local_px")]
@@ -345,7 +344,7 @@ def read_xenium(
             "Could not find centroid columns in cells metadata. "
             f"Expected one of {xy_pairs}, found {list(cells.columns)}."
         )
-    coordinates = cells[list(xy)].to_numpy(dtype=np.float32)
+    coordinates = cells[list(xy)].to_numpy(dtype=np.float64)
     if not np.isfinite(coordinates).all():
         raise ValueError("Xenium centroid coordinates contain NaN or infinite values.")
     adata.obsm["spatial"] = coordinates

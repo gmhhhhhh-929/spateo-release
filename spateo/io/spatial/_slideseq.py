@@ -18,10 +18,11 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from PIL import Image
-from scipy.sparse import csr_matrix
 
 from ..._registry import register_function
 from ...configuration import SKM
+from ._matrix import _ids, _numeric, table
+from ._slideseq_matrix import _slideseq_counts
 
 try:
     from ..._settings import Colors
@@ -145,14 +146,17 @@ def _find_first_existing(root: Path, candidates: Sequence[str]) -> Optional[Path
             expanded.append(rel[:-3])
 
     seen = set()
+    found = []
     for rel in expanded:
         if rel in seen:
             continue
         seen.add(rel)
         p = root / rel
         if p.exists():
-            return p
-    return None
+            found.append(p)
+    if len(found) > 1:
+        raise ValueError(f"Ambiguous Slide-seq files; select an explicit filename: {found}")
+    return found[0] if found else None
 
 
 def _normalize_names(index_like) -> pd.Index:
@@ -260,71 +264,31 @@ def _resolve_bead_file(root: Path, bead_file: Optional[str] = None) -> Path:
     return p
 
 
-def _read_slideseq_counts(
-    path: Path,
-    dtype: str = "int32",
-    make_sparse: bool = True,
-) -> AnnData:
-    df = _read_table_with_auto_sep(path)
-    df = _drop_empty_unnamed_columns(df)
-
-    if df.shape[1] < 2:
-        raise ValueError(f"Counts file has too few columns: {path}")
-
-    gene_names = pd.Index(df.iloc[:, 0].astype(str).str.strip(), dtype="object")
-    expr = df.iloc[:, 1:].copy()
-
-    # Drop empty trailing columns and unnamed columns introduced by CSV formatting.
-    valid_cols = []
-    for col in expr.columns:
-        col_str = str(col).strip()
-        if (col_str == "" or col_str.lower().startswith("unnamed:")) and expr[col].isna().all():
-            continue
-        valid_cols.append(col)
-    expr = expr.loc[:, valid_cols]
-
-    obs_names = _normalize_names(expr.columns)
-    expr.columns = obs_names
-
-    if obs_names.duplicated().any():
-        dup_names = obs_names[obs_names.duplicated()].tolist()
-        raise ValueError("Duplicated barcode names detected in counts columns. " f"Examples: {dup_names[:10]}")
-
-    expr = expr.apply(pd.to_numeric, errors="coerce").fillna(0)
-    matrix = expr.to_numpy(dtype=dtype).T  # beads x genes
-
-    if make_sparse:
-        X = csr_matrix(matrix)
-    else:
-        X = matrix
-
-    adata = AnnData(X=X)
-    adata.obs_names = obs_names
-    adata.var_names = gene_names
+def _read_slideseq_counts(path: Path, dtype: str = "int64", make_sparse: bool = True) -> AnnData:
+    """Stream native counts without coercion, truncation or dense intermediate tables."""
+    adata = _slideseq_counts(path, full=True, budget=sys.maxsize)
+    target = np.dtype(dtype)
+    if target.kind not in "iu" or (adata.X.data.size and adata.X.data.max() > np.iinfo(target).max):
+        raise ValueError("Requested count dtype cannot preserve Slide-seq counts exactly")
+    adata.X = adata.X.astype(target)
+    if not make_sparse:
+        adata.X = adata.X.toarray()
     adata.var["gene_symbol"] = adata.var_names.astype(str)
-    adata.var_names_make_unique()
     return adata
 
 
 def _read_slideseq_beads(path: Path) -> pd.DataFrame:
-    df = _read_table_with_auto_sep(path)
-    df = _drop_empty_unnamed_columns(df)
-    df = _set_name_index(df)
-    df.index = _normalize_names(df.index)
-
+    df = table(path, full=True, budget=sys.maxsize)
+    name_col = _guess_name_col(df)
+    if name_col is None:
+        raise ValueError("Slide-seq coordinates require a named barcode column")
+    df.index = _ids(df[name_col], "Slide-seq bead coordinates")
+    df = df.drop(columns=[name_col])
     coord_cols = _find_coord_cols(df)
     if len(coord_cols) < 2:
-        raise ValueError(
-            f"Could not detect coordinate columns in {path}. " "Expected columns like 'xcoord'/'ycoord' or 'x'/'y'."
-        )
-
-    df[coord_cols[0]] = pd.to_numeric(df[coord_cols[0]], errors="coerce")
-    df[coord_cols[1]] = pd.to_numeric(df[coord_cols[1]], errors="coerce")
-
-    if df.index.duplicated().any():
-        warnings.warn("Found duplicated barcodes in bead table. Keeping the first occurrence.")
-        df = df[~df.index.duplicated(keep="first")].copy()
-
+        raise ValueError("Slide-seq bead coordinates require X and Y columns")
+    for column in coord_cols:
+        df[column] = _numeric(df[column], "Slide-seq coordinates")
     return df
 
 
@@ -429,8 +393,8 @@ def _init_spatial_slot(
 def read_slideseq(
     path: Union[str, Path],
     *,
-    counts_file: str = "MappedDGEForR.csv",
-    bead_file: str = "BeadLocationsForR.csv",
+    counts_file: Optional[str] = None,
+    bead_file: Optional[str] = None,
     load_images: bool = True,
 ) -> AnnData:
     """
@@ -450,9 +414,9 @@ def read_slideseq(
     path
         Path to the Slide-seq data directory.
     counts_file
-        Counts matrix filename relative to ``path``.
+        Counts matrix filename relative to ``path``; by default discover CSV or gzip.
     bead_file
-        Bead table filename relative to ``path``.
+        Bead table filename relative to ``path``; by default discover CSV or gzip.
     load_images
         Whether to load microscopy images under the same folder.
 
@@ -480,7 +444,7 @@ def read_slideseq(
     bead_path = _resolve_bead_file(root, bead_file=bead_file)
 
     _progress(f"Loading counts matrix: {counts_path.name}")
-    adata = _read_slideseq_counts(counts_path, dtype="int32", make_sparse=True)
+    adata = _read_slideseq_counts(counts_path, dtype="int64", make_sparse=True)
 
     # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
@@ -495,22 +459,10 @@ def read_slideseq(
             f"Could not find X/Y coordinate columns in {bead_path}. " f"Available columns: {list(bead_df.columns)}"
         )
 
-    common_barcodes = adata.obs_names.intersection(bead_df.index)
-    if len(common_barcodes) == 0:
-        raise ValueError(
-            "No overlapping barcodes between counts matrix and bead table. "
-            f"Example matrix barcodes: {list(adata.obs_names[:5])}; "
-            f"example bead barcodes: {list(bead_df.index[:5])}"
-        )
-
-    if len(common_barcodes) < adata.n_obs:
-        warnings.warn(
-            f"Only {len(common_barcodes)} / {adata.n_obs} barcodes are shared between counts and bead files. "
-            "Subsetting to the intersection."
-        )
-
-    adata = adata[common_barcodes, :].copy()
-    bead_df = bead_df.loc[common_barcodes].copy()
+    missing = adata.obs_names.difference(bead_df.index)
+    if len(missing):
+        raise ValueError(f"Missing coordinates for {len(missing)} matrix barcodes: {list(missing[:5])}")
+    bead_df = bead_df.loc[adata.obs_names].copy()
 
     adata.obs = adata.obs.join(bead_df, how="left")
     adata.obs["barcode"] = adata.obs_names.astype(str)
@@ -539,7 +491,7 @@ def read_slideseq(
         "counts_file": counts_path.name,
         "bead_file": bead_path.name,
         "coord_columns": [x_col, y_col],
-        "coordinate_unit": "pixel",
+        "coordinate_unit": "source coordinate units (not declared)",
         "n_images": len(images),
         "image_keys": list(images.keys()),
         "spatial_key": "spatial",

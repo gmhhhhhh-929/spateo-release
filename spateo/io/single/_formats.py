@@ -16,10 +16,8 @@ from ...configuration import SKM
 
 try:
     from anndata.io import read_h5ad as _anndata_read_h5ad
-    from anndata.io import read_mtx as _anndata_read_mtx
 except ImportError:
     from anndata import read_h5ad as _anndata_read_h5ad
-    from anndata import read_mtx as _anndata_read_mtx
 
 
 @register_function(
@@ -141,21 +139,41 @@ def _collect_datasets(dsets: dict, group: h5py.Group) -> None:
             _collect_datasets(dsets, v)
 
 
-def _read_v3_10x_h5(f: h5py.File) -> AnnData:
+def _validated_10x_sparse(dsets):
     from scipy.sparse import csr_matrix
 
+    from ..spatial._matrix import _ids, integer_counts
+
+    shape = np.asarray(dsets["shape"])
+    if shape.shape != (2,) or shape.dtype.kind not in "iu" or np.any(shape <= 0):
+        raise ValueError("Invalid 10x matrix dimensions")
+    n_genes, n_cells = map(int, shape)
+    data = integer_counts(dsets["data"], "10x")
+    indices, indptr = dsets["indices"], dsets["indptr"]
+    if indices.dtype.kind not in "iu" or indptr.dtype.kind not in "iu":
+        raise ValueError("10x sparse indices must be integers")
+    if (
+        len(indices) != len(data)
+        or len(indptr) != n_cells + 1
+        or indptr[0] != 0
+        or indptr[-1] != len(data)
+        or np.any(indptr[1:] < indptr[:-1])
+        or np.any(indices < 0)
+        or np.any(indices >= n_genes)
+    ):
+        raise ValueError("Invalid 10x sparse indexing")
+    ids = _ids(dsets["barcodes"], "10x barcodes")
+    if len(ids) != n_cells:
+        raise ValueError("10x barcode dimensions disagree")
+    _ids(dsets.get("id", dsets.get("genes", [])), "10x feature IDs")
+    return csr_matrix((data, indices, indptr), shape=(n_cells, n_genes))
+
+
+def _read_v3_10x_h5(f: h5py.File) -> AnnData:
     dsets = {}
     _collect_datasets(dsets, f["matrix"])
 
-    n_cols, n_rows = dsets["shape"]  # transposed
-    data = dsets["data"]
-    if dsets["data"].dtype == np.dtype("int32"):
-        data = dsets["data"].view("float32")
-        data[:] = dsets["data"]
-    matrix = csr_matrix(
-        (data, dsets["indices"], dsets["indptr"]),
-        shape=(n_rows, n_cols),
-    )
+    matrix = _validated_10x_sparse(dsets)
     obs_dict = {"obs_names": dsets["barcodes"].astype(str)}
     var_dict = {"var_names": dsets["name"].astype(str)}
 
@@ -189,8 +207,6 @@ def _read_v3_10x_h5(f: h5py.File) -> AnnData:
 
 
 def _read_legacy_10x_h5(f: h5py.File, genome: str | None) -> AnnData:
-    from scipy.sparse import csr_matrix
-
     children = list(f.keys())
     if not genome:
         if len(children) > 1:
@@ -207,15 +223,7 @@ def _read_legacy_10x_h5(f: h5py.File, genome: str | None) -> AnnData:
     dsets = {}
     _collect_datasets(dsets, f[genome])
 
-    n_cols, n_rows = dsets["shape"]
-    data = dsets["data"]
-    if dsets["data"].dtype == np.dtype("int32"):
-        data = dsets["data"].view("float32")
-        data[:] = dsets["data"]
-    matrix = csr_matrix(
-        (data, dsets["indices"], dsets["indptr"]),
-        shape=(n_rows, n_cols),
-    )
+    matrix = _validated_10x_sparse(dsets)
     return AnnData(
         matrix,
         obs=dict(obs_names=dsets["barcodes"].astype(str)),
@@ -301,12 +309,22 @@ def _read_10x_mtx(
     compressed: bool = True,
 ) -> AnnData:
     suffix = "" if is_legacy else (".gz" if compressed else "")
-    adata = _anndata_read_mtx(path / f"{prefix}matrix.mtx{suffix}").T
+    from scipy.io import mmread
+    from scipy.sparse import coo_matrix
+
+    from ..spatial._matrix import _ids, integer_counts
+
+    matrix = coo_matrix(mmread(path / f"{prefix}matrix.mtx{suffix}"))
+    matrix.data = integer_counts(matrix.data, "10x MEX")
+    adata = AnnData(matrix.T.tocsr())
     genes = pd.read_csv(
         path / f"{prefix}{'genes' if is_legacy else 'features'}.tsv{suffix}",
         header=None,
         sep="\t",
+        dtype=str,
+        keep_default_na=False,
     )
+    _ids(genes[0], "10x feature IDs")
     if var_names == "gene_symbols":
         var_names_idx = pd.Index(genes[1].array)
         if make_unique:
@@ -320,6 +338,6 @@ def _read_10x_mtx(
         raise ValueError("`var_names` needs to be 'gene_symbols' or 'gene_ids'")
     if not is_legacy:
         adata.var["feature_types"] = genes[2].array
-    barcodes = pd.read_csv(path / f"{prefix}barcodes.tsv{suffix}", header=None)
-    adata.obs_names = barcodes[0].array
+    barcodes = pd.read_csv(path / f"{prefix}barcodes.tsv{suffix}", header=None, dtype=str, keep_default_na=False)
+    adata.obs_names = _ids(barcodes[0], "10x barcodes")
     return adata

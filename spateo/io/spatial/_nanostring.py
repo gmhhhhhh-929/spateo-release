@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import Optional, Union
@@ -17,6 +18,7 @@ from scipy.sparse import csr_matrix
 
 from ..._registry import register_function
 from ...configuration import SKM
+from ._matrix import _ids, _numeric, table, table_values
 
 try:
     from ..._settings import Colors
@@ -379,29 +381,31 @@ def read_nanostring(
     if not meta_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {meta_path}")
 
-    counts = pd.read_csv(counts_path, header=0)
+    counts = table(counts_path, full=True, budget=sys.maxsize)
     counts_cell_id = _find_first_column(counts, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (counts)")
     counts_fov = _find_first_column(counts, ("fov", "FOV", "fov_id", "fovID"), context="fov (counts)")
     counts = counts.set_index(counts_cell_id)
-    counts.index = counts.index.astype(str).str.cat(counts.pop(counts_fov).astype(str).values, sep="_")
+    counts.index = _ids(
+        counts.index.astype(str).str.cat(counts.pop(counts_fov).astype(str).values, sep="_"), "CosMx matrix IDs"
+    )
 
-    obs = pd.read_csv(meta_path, header=0)
+    obs = table(meta_path, full=True, budget=sys.maxsize)
     obs_cell_id = _find_first_column(obs, ("cell_ID", "cell_id", "cellid", "CellID"), context="cell id (metadata)")
     obs_fov = _find_first_column(obs, ("fov", "FOV", "fov_id", "fovID"), context="fov (metadata)")
     obs = obs.set_index(obs_cell_id)
     obs[obs_fov] = pd.Categorical(obs[obs_fov].astype(str))
     # Keep original cell_ID column for segmentation label matching.
     obs["cell_ID"] = pd.to_numeric(obs.index, errors="coerce")
-    obs.index = obs.index.astype(str).str.cat(obs[obs_fov].astype(str).values, sep="_")
+    obs.index = _ids(obs.index.astype(str).str.cat(obs[obs_fov].astype(str).values, sep="_"), "CosMx metadata IDs")
     obs.rename_axis(None, inplace=True)
 
-    common_index = obs.index.intersection(counts.index)
-    if len(common_index) == 0:
-        raise ValueError("No overlapping cell IDs between counts and metadata after combining with FOV suffix.")
-
+    if not counts.index.isin(obs.index).all():
+        raise ValueError("CosMx matrix IDs lack matching metadata/coordinates")
+    common_index = counts.index
+    _ids(counts.columns, "CosMx gene IDs")
     _progress(f"Matched cells: {len(common_index)}")
     adata = AnnData(
-        X=csr_matrix(counts.loc[common_index, :].values),
+        X=csr_matrix(table_values(counts, "CosMx counts", raw=True)),
         obs=obs.loc[common_index, :].copy(),
         uns={"spatial": {}},
     )
@@ -418,12 +422,20 @@ def read_nanostring(
             "Could not find local coordinate columns in metadata. "
             "Expected e.g. ['CenterX_local_px', 'CenterY_local_px']."
         )
-    adata.obsm["spatial"] = adata.obs[list(local_xy)].to_numpy()
+    adata.obsm["spatial"] = _numeric(adata.obs[list(local_xy)], "CosMx local coordinates")
     adata.obs.drop(columns=list(local_xy), inplace=True)
 
     global_xy = _find_xy_columns(adata.obs, kind="global")
+    optional_global_coordinates = "absent"
     if global_xy is not None:
-        adata.obsm["spatial_fov"] = adata.obs[list(global_xy)].to_numpy()
+        try:
+            adata.obsm["spatial_fov"] = _numeric(adata.obs[list(global_xy)], "CosMx global coordinates")
+            optional_global_coordinates = "loaded"
+        except ValueError as exc:
+            optional_global_coordinates = "invalid"
+            warnings.warn(
+                f"Optional global FOV coordinates are invalid; local coordinates retained: {exc}", stacklevel=2
+            )
     else:
         warnings.warn("Global coordinate columns not found in metadata; `obsm['spatial_fov']` will not be created.")
 
@@ -456,7 +468,13 @@ def read_nanostring(
             if fov not in adata.uns["spatial"]:
                 warnings.warn(f"FOV `{fov}` does not exist in `{subdir}`, skipping image `{fname}`.")
                 continue
-            adata.uns["spatial"][fov]["images"][kind] = _read_image(folder / fname)
+            slot = adata.uns["spatial"][fov]
+            slot.setdefault("image_files", {})[kind] = str(folder / fname)
+            try:
+                slot["images"][kind] = _read_image(folder / fname)
+            except (OSError, ValueError) as exc:
+                slot.setdefault("failed_image_files", {})[kind] = str(folder / fname)
+                warnings.warn(f"Failed to load optional image {fname}: {exc}", stacklevel=2)
 
     if has_geometry:
         adata.obs["geometry"] = geometry_wkt
@@ -499,6 +517,7 @@ def read_nanostring(
         adata.uns["spateo_io"] = {"type": "nanostring_seg"}
     else:
         adata.uns["spateo_io"] = {"type": "nanostring"}
+    adata.uns["spateo_io"]["optional_global_coordinates"] = optional_global_coordinates
     _progress(f"Done (n_obs={adata.n_obs}, n_vars={adata.n_vars})", level="success")
     return adata
 

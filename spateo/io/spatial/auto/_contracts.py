@@ -6,10 +6,9 @@ Probes check structure only; ``read_core`` validates all core identifiers and va
 
 from __future__ import annotations
 
-import csv
 import json
 import re
-from array import array
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -17,8 +16,9 @@ from anndata import AnnData
 from scipy import sparse
 
 from ....configuration import SKM
-from .._matrix import _POS, _h5, _ids, _mex, _numeric, _open, table
+from .._matrix import _POS, _h5, _ids, _mex, _numeric, table, table_values
 from .._native_readers import DOMESTIC, get_reader
+from .._slideseq_matrix import _slideseq_counts
 from ._discovery import Candidate
 from ._errors import ContractError, ResourceDeferred
 from ._stereo import probe_stereo, read_stereo_core
@@ -153,60 +153,6 @@ def _meta(candidate, *, full=False, budget=512 * 1024**2):
     return frame, values, units
 
 
-def _slideseq_counts(path, *, full=False, budget=512 * 1024**2):
-    """Stream gene-by-bead CSV into sparse storage without a dense table.
-
-    Probe estimates only the bounded row workspace; the full scan enforces a
-    growing sparse-storage budget. All values, row widths and IDs are checked.
-    """
-    with _open(path) as handle:
-        lines = (line for line in handle if line.strip() and not line.startswith("#"))
-        first = next(lines, None)
-        if first is None:
-            raise ContractError(f"Empty table: {path}")
-        sep = "\t" if first.count("\t") > first.count(",") else ","
-        header = next(csv.reader([first], delimiter=sep))
-        if len(header) < 2 or len(set(header)) != len(header):
-            raise ContractError("Slide-seq requires unique barcode columns and a gene column")
-        ids = _ids(header[1:], "Slide-seq expression barcodes")
-        workspace = len(header) * 1024
-        if workspace > budget:
-            raise ResourceDeferred("Slide-seq row workspace exceeds memory budget")
-        reader = csv.reader(lines, delimiter=sep)
-        values, indices, indptr = array("d"), array("q"), array("q", [0])
-        genes = []
-        for row in reader:
-            if len(row) != len(header):
-                raise ContractError(f"Slide-seq row {len(genes) + 2} has inconsistent field count")
-            gene = row[0]
-            if not gene.strip() or gene.lower() in ("nan", "none", "<na>"):
-                raise ContractError("Missing Slide-seq gene identifier")
-            numeric = _numeric(row[1:], "Slide-seq counts", nonnegative=True)
-            if not full:
-                return dict(estimated_bytes=workspace, storage="streamed_slideseq_csv", n_obs=len(ids))
-            nz = np.flatnonzero(numeric)
-            # Reserve space for buffers, final CSR conversion, ID tables and one row.
-            estimated = workspace + (len(genes) + 1) * 1024 + (len(values) + len(nz)) * 64
-            if estimated > budget:
-                raise ResourceDeferred("Slide-seq sparse storage exceeds memory budget")
-            values.frombytes(numeric[nz].astype(np.float64, copy=False).tobytes())
-            indices.frombytes(nz.astype(np.int64, copy=False).tobytes())
-            indptr.append(len(values))
-            genes.append(gene)
-        if not genes:
-            raise ContractError(f"Empty expression table: {path}")
-        gene_ids = _ids(genes, "Slide-seq expression genes")
-        matrix = sparse.csr_matrix(
-            (
-                np.frombuffer(values, dtype=np.float64),
-                np.frombuffer(indices, dtype=np.int64),
-                np.frombuffer(indptr, dtype=np.int64),
-            ),
-            shape=(len(genes), len(ids)),
-        ).T.tocsr()
-        return AnnData(matrix, obs=pd.DataFrame(index=ids), var=pd.DataFrame(index=gene_ids))
-
-
 def probe(candidate: Candidate, budget):
     """Bounded format checks; no ranking, inference of missing values, or IO writes."""
     tech = candidate.technology
@@ -258,7 +204,7 @@ def _table_counts(candidate, metadata_ids, budget):
         ids = _ids(frame[key].astype(str) + "_" + frame[fov].astype(str), "CosMx expression IDs")
         numeric = frame.drop(columns=[key, fov])
         genes = list(numeric.columns)
-        values = _numeric(numeric, "counts", nonnegative=True)
+        values = table_values(numeric, "CosMx counts", raw=True)
     else:
         first = frame.columns[0]
         rows = _ids(frame[first], "expression row IDs")
@@ -270,7 +216,7 @@ def _table_counts(candidate, metadata_ids, budget):
                 raise ContractError("Cannot uniquely align expression axis to metadata IDs; no row-order fallback")
             transpose = bool(col_match)
         ids, genes = (cols, list(rows)) if transpose else (rows, list(cols))
-        values = _numeric(frame.iloc[:, 1:], "expression values", nonnegative=candidate.representation != "processed")
+        values = table_values(frame.iloc[:, 1:], "expression values", raw=candidate.representation != "processed")
         if tech == "merfish" and np.any(values != np.floor(values)):
             raise ContractError("MERFISH raw count table contains non-integer values")
         if transpose:
@@ -322,8 +268,16 @@ def read_core(candidate: Candidate, budget):
                 gx = _column(adata.obs, ("CenterX_global_px", "center_x_global_px", "x_global_px"))
                 gy = _column(adata.obs, ("CenterY_global_px", "center_y_global_px", "y_global_px"))
                 adata.obsm["spatial_fov"] = _numeric(adata.obs[[gx, gy]], "global FOV coordinates")
-            except ContractError:
-                pass  # Optional global coordinates do not replace required local coordinates.
+                adata.uns.setdefault("spateo_io", {})["optional_global_coordinates"] = "loaded"
+            except ContractError as exc:
+                present = any(
+                    _token(c) in {"centerxglobalpx", "centeryglobalpx", "xglobalpx", "yglobalpx"} for c in adata.obs
+                )
+                adata.uns.setdefault("spateo_io", {})["optional_global_coordinates"] = (
+                    "invalid" if present else "absent"
+                )
+                if present:
+                    warnings.warn(f"Optional global FOV coordinates are invalid; local coordinates retained: {exc}")
     if not adata.obs_names.is_unique or adata.n_obs == 0 or adata.n_vars == 0:
         raise ContractError("Empty or duplicate observation axis")
     if (

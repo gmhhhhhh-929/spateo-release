@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import warnings
 from pathlib import Path
 from typing import Optional, Union
@@ -13,6 +14,7 @@ from scipy.sparse import csr_matrix
 
 from ..._registry import register_function
 from ...configuration import SKM
+from ._matrix import _ids, _numeric, table, table_values
 
 try:
     from ..._settings import Colors
@@ -143,8 +145,8 @@ def _set_name_index(df: pd.DataFrame) -> pd.DataFrame:
     if name_col is None:
         raise ValueError("Could not find NAME-like column.")
     out = df.copy()
-    out[name_col] = out[name_col].astype(str)
-    out = out.drop_duplicates(subset=[name_col]).set_index(name_col)
+    out[name_col] = _ids(out[name_col], "STARmap metadata IDs")
+    out = out.set_index(name_col)
     out.index = _normalize_names(out.index)
     return out
 
@@ -168,7 +170,14 @@ def _find_coord_cols(df: pd.DataFrame) -> list[str]:
 
 
 def _read_spatial_table(path: Path, reorient_xy: bool = False) -> pd.DataFrame:
-    df = _read_table(path)
+    df = table(path, full=True, budget=sys.maxsize)
+    if "NAME" in df and df.iloc[0]["NAME"] == "TYPE":
+        axes = [c for c in ("X", "Y", "Z") if c in df]
+        if len(axes) < 2 or any(df.iloc[0][c] != "numeric" for c in axes):
+            raise ValueError("Malformed STARmap TYPE coordinate declaration")
+        if any(v not in ("numeric", "group", "string") for v in df.iloc[0].drop("NAME")):
+            raise ValueError("Unknown STARmap TYPE field declaration")
+        df = df.iloc[1:].copy()
     coord_cols = _find_coord_cols(df)
 
     if len(coord_cols) < 2:
@@ -188,6 +197,7 @@ def _read_spatial_table(path: Path, reorient_xy: bool = False) -> pd.DataFrame:
             "Expected columns like X/Y(/Z) or global_x/global_y."
         )
 
+    _numeric(df[coord_cols], "STARmap spatial coordinates")
     if reorient_xy:
         x_col, y_col = coord_cols[:2]
         xx = pd.to_numeric(df[x_col], errors="coerce").to_numpy()
@@ -199,33 +209,35 @@ def _read_spatial_table(path: Path, reorient_xy: bool = False) -> pd.DataFrame:
     return df
 
 
-def _read_expression(path: Path, dtype: str = "float32") -> AnnData:
-    df = _read_table(path)
+def _read_expression(path: Path, dtype=None, expected_ids=None) -> AnnData:
+    df = table(path, full=True, budget=sys.maxsize)
     if df.shape[1] < 2:
         raise ValueError(f"Expression file has too few columns: {path}")
-
-    first_col = str(df.columns[0])
-    first_col_lower = first_col.lower()
-    name_col = _find_name_col(df)
-    gene_like = {"gene", "genes", "feature", "features", "unnamed: 0"}
-
-    if first_col_lower in gene_like or (name_col is None and df.shape[0] < df.shape[1]):
-        gene_names = df.iloc[:, 0].astype(str)
-        obs_names = _normalize_names(df.columns[1:])
-        matrix = df.iloc[:, 1:].apply(pd.to_numeric, errors="coerce").fillna(0).to_numpy(dtype=dtype).T
-        adata = AnnData(X=csr_matrix(matrix))
-        adata.obs_names = obs_names
-        adata.var_names = pd.Index(gene_names, dtype="object")
+    rows = _ids(df.iloc[:, 0], "STARmap expression row IDs")
+    columns = _ids(df.columns[1:], "STARmap expression column IDs")
+    if expected_ids is not None:
+        row_match, col_match = rows.isin(expected_ids).all(), columns.isin(expected_ids).all()
+        if row_match == col_match:
+            raise ValueError("Cannot uniquely align STARmap expression axis to metadata IDs")
+        transpose = bool(col_match)
     else:
-        obs_names = _normalize_names(df.iloc[:, 0])
-        expr = df.iloc[:, 1:].apply(pd.to_numeric, errors="coerce").fillna(0)
-        adata = AnnData(X=csr_matrix(expr.to_numpy(dtype=dtype)))
-        adata.obs_names = obs_names
-        adata.var_names = pd.Index(expr.columns.astype(str), dtype="object")
-
-    adata.var_names_make_unique()
-    if adata.obs_names.has_duplicates:
-        raise ValueError(f"Expression file contains duplicated cell/spot names: {path}")
+        transpose = str(df.columns[0]).lower() in {"gene", "genes", "feature", "features", "unnamed: 0"}
+    raw = "processed_expression" not in path.name
+    values = table_values(df.iloc[:, 1:], "STARmap expression", raw=raw)
+    if dtype is not None:
+        converted = values.astype(dtype)
+        if not np.isfinite(converted).all():
+            raise ValueError("Requested STARmap dtype would lose expression precision")
+        exact = (
+            all(int(a) == int(b) for a, b in zip(values.flat, converted.flat))
+            if raw
+            else np.array_equal(values, converted.astype(values.dtype))
+        )
+        if not np.isfinite(converted).all() or not exact:
+            raise ValueError("Requested STARmap dtype would lose expression precision")
+        values = converted
+    adata = AnnData(X=csr_matrix(values.T if transpose else values))
+    adata.obs_names, adata.var_names = (columns, rows) if transpose else (rows, columns)
     return adata
 
 
@@ -287,7 +299,7 @@ def read_starmap_plus(
     meta_file: str,
     spatial_file: str,
     reorient_xy: bool = False,
-    dtype: str = "float32",
+    dtype: Optional[str] = None,
 ) -> AnnData:
     """Read a STARmap PLUS directory into a single AnnData object.
 
@@ -297,6 +309,9 @@ def read_starmap_plus(
         Directory containing STARmap PLUS outputs.
     counts_file
         Expression matrix filename relative to ``path``.
+    dtype
+        Optional lossless numeric cast. By default raw counts retain int64 and
+        processed expression retains float64; a lossy requested cast is rejected.
     spatial_file
         Optional spatial coordinate filename relative to ``path``. When not
         provided, the reader will auto-discover the conventional STARmap PLUS
@@ -321,8 +336,10 @@ def read_starmap_plus(
     if spatial_path is None or not spatial_path.exists():
         raise FileNotFoundError(f"Spatial file not found under {root}")
 
+    _progress(f"Loading spatial table: {spatial_path.name}")
+    spatial = _set_name_index(_read_spatial_table(spatial_path, reorient_xy=reorient_xy))
     _progress(f"Loading expression matrix: {expr_path.name}")
-    adata = _read_expression(expr_path, dtype=dtype)
+    adata = _read_expression(expr_path, dtype=dtype, expected_ids=spatial.index)
 
     # Set spateo keys
     SKM.init_adata_type(adata, SKM.ADATA_UMI_TYPE)
@@ -331,28 +348,9 @@ def read_starmap_plus(
 
     adata.obs_names = _normalize_names(adata.obs_names)
 
-    _progress(f"Loading spatial table: {spatial_path.name}")
-    spatial = _read_spatial_table(spatial_path, reorient_xy=reorient_xy)
-    try:
-        spatial = _set_name_index(spatial)
-    except ValueError:
-        if len(spatial) != adata.n_obs:
-            raise ValueError(
-                f"Spatial file {spatial_path.name} has no NAME-like column and row number does not match expression matrix."
-            )
-        spatial = spatial.copy()
-        spatial.index = adata.obs_names
-
-    common_names = adata.obs_names[adata.obs_names.isin(spatial.index)]
-    if len(common_names) == 0:
-        raise ValueError(
-            "No overlapping names between expression matrix and spatial table. "
-            f"Example expression names: {list(adata.obs_names[:5])}; "
-            f"example spatial names: {list(spatial.index[:5])}"
-        )
-
-    adata = adata[common_names].copy()
-    adata.obs = _merge_obs(adata.obs, spatial.loc[common_names], "spatial", allow_row_match=True)
+    if not adata.obs_names.isin(spatial.index).all():
+        raise ValueError("STARmap matrix IDs lack matching spatial coordinates")
+    adata.obs = spatial.loc[adata.obs_names].copy()
 
     coord_cols = _find_coord_cols(adata.obs)
     if len(coord_cols) < 2:
@@ -360,7 +358,7 @@ def read_starmap_plus(
             "Could not find coordinate columns after merging spatial table. "
             f"Available columns: {list(adata.obs.columns[:20])}"
         )
-    adata.obsm["spatial"] = adata.obs[coord_cols].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    adata.obsm["spatial"] = _numeric(adata.obs[coord_cols], "STARmap spatial coordinates")
 
     if spot_meta_path is not None:
         _progress(f"Loading spot metadata: {spot_meta_path.name}")

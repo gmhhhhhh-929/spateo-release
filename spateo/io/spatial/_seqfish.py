@@ -44,6 +44,7 @@ from anndata import AnnData
 from scipy.sparse import csr_matrix
 
 from ...configuration import SKM
+from ._matrix import _ids, _numeric, table, table_values
 
 try:
     import tifffile
@@ -366,13 +367,11 @@ def _standardize_meta(df: pd.DataFrame) -> pd.DataFrame:
     df = _clean_dataframe(df)
     id_col = _guess_cell_id_column(df)
     if id_col is None:
-        df = df.copy()
-        df.insert(0, "cell_id", np.arange(df.shape[0]).astype(str))
-        id_col = "cell_id"
+        raise ValueError("seqFISH metadata requires explicit cell identifiers")
 
     out = df.copy()
-    out[id_col] = out[id_col].astype(str)
-    out = out.drop_duplicates(subset=[id_col]).set_index(id_col)
+    out[id_col] = _ids(out[id_col], "seqFISH metadata IDs")
+    out = out.set_index(id_col)
 
     rename_map = {}
     x_col, y_col, z_col = _guess_xy_columns(out.reset_index())
@@ -411,87 +410,35 @@ def _is_likely_numeric_series(series: pd.Series) -> bool:
 
 
 def _prepare_counts(path: Path, expected_ids: Optional[pd.Index] = None) -> AnnData:
-    df = _clean_dataframe(_read_table_with_auto_sep(path))
-    if df.shape[0] == 0 or df.shape[1] == 0:
-        raise ValueError(f"Empty counts table: {path}")
-
-    id_col = _guess_cell_id_column(df)
-    if id_col is None:
-        first_col = df.columns[0]
-        if not _is_likely_numeric_series(df[first_col]):
-            id_col = first_col
-
-    # Default orientation: rows=cells, cols=genes
-    use_transpose = False
-    if expected_ids is not None and len(expected_ids) > 0:
-        if id_col is not None:
-            row_ids = pd.Index(df[id_col].astype(str))
-            col_ids = pd.Index(df.columns.drop(id_col).astype(str))
-            row_overlap = len(set(row_ids).intersection(set(expected_ids.astype(str))))
-            col_overlap = len(set(col_ids).intersection(set(expected_ids.astype(str))))
-            if col_overlap > row_overlap and col_overlap >= max(1, int(0.3 * len(expected_ids))):
-                use_transpose = True
-        else:
-            col_ids = pd.Index(df.columns.astype(str))
-            col_overlap = len(set(col_ids).intersection(set(expected_ids.astype(str))))
-            if col_overlap >= max(1, int(0.3 * len(expected_ids))):
-                use_transpose = True
-
-    if not use_transpose:
-        obs_ids = df[id_col].astype(str).tolist() if id_col is not None else [str(i) for i in range(df.shape[0])]
-        mat_df = df.drop(columns=[id_col]) if id_col is not None else df
-        numeric = mat_df.apply(pd.to_numeric, errors="coerce").fillna(0)
-        X = csr_matrix(numeric.to_numpy())
-        adata = AnnData(X=X)
-        adata.obs_names = _ensure_unique_str_index(obs_ids, "cell")
-        adata.var_names = pd.Index(numeric.columns.astype(str))
-        adata.obs["cell_id"] = adata.obs_names.astype(str)
-        return adata
-
-    # Transposed layout: rows=genes, cols=cells
-    if id_col is None:
-        raise ValueError(
-            f"Counts table at {path.name} appears to require transposition, but no gene-id column could be identified."
-        )
-    gene_names = df[id_col].astype(str).tolist()
-    numeric = df.drop(columns=[id_col]).apply(pd.to_numeric, errors="coerce").fillna(0)
-    X = csr_matrix(numeric.to_numpy().T)
-    adata = AnnData(X=X)
-    adata.obs_names = _ensure_unique_str_index(list(numeric.columns.astype(str)), "cell")
-    adata.var_names = pd.Index(gene_names)
-    adata.obs["cell_id"] = adata.obs_names.astype(str)
+    df = table(path, full=True, budget=sys.maxsize)
+    if df.shape[1] < 2 or expected_ids is None:
+        raise ValueError("seqFISH requires an ID-indexed expression matrix and metadata")
+    rows = _ids(df.iloc[:, 0], "seqFISH expression row IDs")
+    columns = _ids(df.columns[1:], "seqFISH expression column IDs")
+    row_match, col_match = rows.isin(expected_ids).all(), columns.isin(expected_ids).all()
+    if row_match == col_match:
+        raise ValueError("Cannot uniquely align seqFISH expression axis to metadata IDs")
+    values = table_values(df.iloc[:, 1:], "seqFISH counts", raw=True)
+    ids, genes = (rows, columns) if row_match else (columns, rows)
+    adata = AnnData(X=csr_matrix(values if row_match else values.T))
+    adata.obs_names, adata.var_names = ids, genes
+    adata.obs["cell_id"] = ids
     return adata
 
 
 def _attach_meta(adata: AnnData, meta: pd.DataFrame, sample_key: str) -> None:
-    if meta.empty:
-        adata.obs["region"] = sample_key
-        return
-
-    meta_index = meta.index.astype(str)
-    obs_index = adata.obs_names.astype(str)
-
-    overlap = len(set(meta_index).intersection(set(obs_index)))
-    if overlap > 0:
-        aligned = meta.reindex(obs_index)
-    elif len(meta) == adata.n_obs:
-        aligned = meta.copy()
-        aligned.index = obs_index
-    else:
-        warnings.warn(
-            "Metadata table could not be aligned by cell IDs and has a different number of rows "
-            f"({len(meta)} vs {adata.n_obs}). Metadata will not be attached to obs."
-        )
-        adata.obs["region"] = sample_key
-        return
-
-    for col in aligned.columns:
+    if not adata.obs_names.isin(meta.index).all():
+        raise ValueError("seqFISH matrix IDs lack matching metadata/coordinates")
+    aligned = meta.reindex(adata.obs_names)
+    for col in aligned:
         adata.obs[col] = aligned[col].values
-
     adata.obs["region"] = sample_key
-    if "center_x" in adata.obs.columns and "center_y" in adata.obs.columns:
-        spatial = adata.obs[["center_x", "center_y"]].to_numpy(dtype=float)
-        adata.obsm["spatial"] = spatial
+    axes = ["center_x", "center_y"]
+    if not all(axis in adata.obs for axis in axes):
+        raise ValueError("seqFISH metadata requires x and y coordinates")
+    if "center_z" in adata.obs:
+        axes.append("center_z")
+    adata.obsm["spatial"] = _numeric(adata.obs[axes], "seqFISH spatial coordinates")
 
 
 def _normalize_raster_array(arr: Any) -> Any:
@@ -687,7 +634,7 @@ def read_seqfish(
     sample_key = group_key or root.name
 
     _progress(f"Loading metadata: {meta_path.name}")
-    meta = _standardize_meta(_read_table_with_auto_sep(meta_path))
+    meta = _standardize_meta(table(meta_path, full=True, budget=sys.maxsize))
 
     _progress(f"Loading counts matrix: {counts_path.name}")
     adata = _prepare_counts(counts_path, expected_ids=meta.index)
@@ -697,7 +644,6 @@ def read_seqfish(
     SKM.init_uns_pp_namespace(adata)
     _progress(f"Set Spadeo-specific key values:adata.uns['__type'] and adata.uns['pp']", level="step")
 
-    adata.X = csr_matrix(np.asarray(adata.X.todense() if hasattr(adata.X, "todense") else adata.X, dtype=np.float32))
     adata.obs["region"] = sample_key
     adata.obs["dataset"] = root.name
     adata.var_names = pd.Index(pd.Series(adata.var_names.astype(str)).astype(str))
@@ -751,7 +697,7 @@ def read_seqfish(
         "options": {
             "load_images": bool(load_images),
             "load_labels": bool(load_labels),
-            "dtype": str(np.dtype(np.float32)),
+            "dtype": str(adata.X.dtype),
         },
     }
 

@@ -14,6 +14,7 @@ from anndata import AnnData
 from ..._registry import register_function
 from ...configuration import SKM
 from ..single import read_10x_h5
+from ._matrix import _ids
 from ._provenance import record_spatial_io, spatial_file_manifest
 from ._xenium import _boundaries_to_wkt, _read_cells_table, _resolve
 
@@ -172,17 +173,15 @@ def _match_cell_metadata(adata: AnnData, cells: pd.DataFrame) -> tuple[AnnData, 
     if cells.empty:
         raise ValueError("Atera cells metadata is empty.")
     id_col = next((name for name in ("cell_id", "cellID", "CellID", "cell_ID") if name in cells), cells.columns[0])
-    cells[id_col] = cells[id_col].astype(str)
-    cells = cells.drop_duplicates(id_col).set_index(id_col)
+    cells[id_col] = _ids(cells[id_col], "Atera cell metadata")
+    cells = cells.set_index(id_col)
     matrix_ids = pd.Index(adata.obs_names.astype(str))
     keep = matrix_ids.isin(cells.index)
     if not keep.all():
-        warnings.warn(
-            f"Dropping {int((~keep).sum())} matrix cells absent from Atera cells metadata.",
-            UserWarning,
+        raise ValueError(
+            f"{int((~keep).sum())} matrix cells are absent from Atera cells metadata; "
+            "provide matching files from the same sample."
         )
-        adata = adata[keep].copy()
-        matrix_ids = pd.Index(adata.obs_names.astype(str))
     cells = cells.reindex(matrix_ids)
     xy = next(
         (
@@ -197,7 +196,7 @@ def _match_cell_metadata(adata: AnnData, cells: pd.DataFrame) -> tuple[AnnData, 
             "Atera cells metadata lacks centroid columns. Expected `x_centroid`/`y_centroid`; "
             f"found {list(cells.columns)}."
         )
-    coords = cells[list(xy)].to_numpy(dtype=np.float32)
+    coords = cells[list(xy)].to_numpy(dtype=np.float64)
     if not np.isfinite(coords).all():
         raise ValueError("Atera centroid coordinates contain NaN or infinite values.")
     adata.obs = cells.copy()

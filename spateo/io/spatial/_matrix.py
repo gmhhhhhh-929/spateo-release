@@ -132,8 +132,7 @@ def _h5(path, *, full=False, budget=512 * 1024**2, technology=None):
         ):
             raise ContractError("Invalid sparse matrix indexing")
         _numeric(data, "H5 counts", nonnegative=True)
-        if technology is not None:
-            data = integer_counts(data, technology)
+        data = integer_counts(data, technology or "10x")
         obs = _ids(g["barcodes"][:], "matrix barcodes")
         ids = _ids(g["features/id"][:], "feature IDs")
         names = [v.decode() if isinstance(v, bytes) else str(v) for v in g["features/name"][:]]
@@ -190,8 +189,7 @@ def _mex(path, *, full=False, budget=512 * 1024**2, technology=None):
     # Validate before duplicate coordinates are coalesced: a negative entry must
     # not be hidden by a positive entry at the same matrix location.
     _numeric(raw.data, "raw MEX counts", nonnegative=True)
-    if technology is not None:
-        raw.data = integer_counts(raw.data, technology)
+    raw.data = integer_counts(raw.data, technology or "10x MEX")
     X = raw.T.tocsr()
     _numeric(X.data, "MEX counts", nonnegative=True)
     var = pd.DataFrame({"gene_ids": ids}, index=ids if technology else [g[1] for g in genes])
@@ -218,3 +216,34 @@ def integer_counts(values, technology):
     if sum(map(int, values)) > np.iinfo(np.int64).max:
         raise ContractError("Aggregated native counts exceed int64 range")
     return values.astype(np.int64, copy=False)
+
+
+def table_values(frame, context, *, raw=True):
+    """Parse table values without float32 truncation or invalid-value coercion.
+
+    Raw exports must be nonnegative integer counts. Processed expression keeps
+    finite signed values at float64 precision; integer-only columns stay exact.
+    """
+    frame = pd.DataFrame(frame)
+    columns = []
+    total = 0
+    for column in frame:
+        try:
+            values = pd.to_numeric(frame[column], errors="raise").to_numpy()
+        except (ValueError, TypeError) as exc:
+            raise ContractError(f"Non-numeric values in {context}") from exc
+        _numeric(values, context, nonnegative=raw)
+        if raw:
+            values = integer_counts(values, context)
+            total += sum(map(int, values))
+        columns.append(values)
+    if not columns:
+        raise ContractError(f"No expression columns in {context}")
+    if raw and total > np.iinfo(np.int64).max:
+        raise ContractError(f"Aggregated counts exceed int64 range in {context}")
+    result = np.column_stack(columns)
+    if not raw and result.dtype.kind == "f":
+        for i, original in enumerate(columns):
+            if original.dtype.kind in "iu" and any(int(a) != int(b) for a, b in zip(original, result[:, i])):
+                raise ContractError(f"Mixed numeric columns exceed exact float64 precision in {context}")
+    return result

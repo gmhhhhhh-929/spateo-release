@@ -16,6 +16,7 @@ from PIL import Image
 from ..._registry import register_function
 from ...configuration import SKM
 from ..single import read_10x_h5
+from ._matrix import _ids
 from ._provenance import record_spatial_io, spatial_file_manifest
 
 if TYPE_CHECKING:
@@ -113,8 +114,8 @@ def _read_tissue_positions(path: Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"{path} is missing required Visium columns: {missing}")
     frame = frame[_POSITION_COLUMNS].copy()
-    frame["barcode"] = frame["barcode"].astype(str)
-    frame = frame.drop_duplicates("barcode", keep="first").set_index("barcode")
+    frame["barcode"] = _ids(frame["barcode"], "Visium tissue positions")
+    frame = frame.set_index("barcode")
     for column in _POSITION_COLUMNS[1:]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     return frame
@@ -203,10 +204,7 @@ def read_visium(
     coordinates = adata.obs[coordinate_columns].to_numpy(dtype=np.float64)
     missing_coordinates = ~np.isfinite(coordinates).all(axis=1)
     if missing_coordinates.any():
-        warnings.warn(
-            f"{int(missing_coordinates.sum())} matrix barcodes have no finite Visium pixel coordinates.",
-            UserWarning,
-        )
+        raise ValueError(f"{int(missing_coordinates.sum())} matrix barcodes have no finite Visium pixel coordinates.")
     adata.obsm[SKM.OBSM_SPATIAL_KEY] = coordinates
 
     scale_path = root / scalefactors_path

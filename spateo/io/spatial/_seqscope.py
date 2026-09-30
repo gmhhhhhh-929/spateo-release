@@ -10,7 +10,7 @@ from anndata import AnnData
 from scipy.sparse import coo_matrix, csr_matrix, issparse
 
 from ...configuration import SKM
-from ...logging import logger_manager as lm
+from ._matrix import _ids, _numeric, integer_counts
 from ._utils import bin_indices, get_bin_props
 
 PathLike = Union[str, "Path"]
@@ -39,7 +39,12 @@ def _read_seqscope_matrix(matrix_dir: PathLike) -> AnnData:
     features.columns = feature_columns
 
     matrix = scipy.io.mmread(matrix_path)
-    matrix = matrix.tocsr() if issparse(matrix) else csr_matrix(matrix)
+    if issparse(matrix):
+        matrix.data = integer_counts(matrix.data, "Seq-Scope")
+        matrix = matrix.tocsr()
+    else:
+        dense = np.asarray(matrix)
+        matrix = csr_matrix(integer_counts(dense.ravel(), "Seq-Scope").reshape(dense.shape))
     expected = (len(features), len(barcodes))
     if matrix.shape == expected:
         matrix = matrix.T.tocsr()
@@ -47,24 +52,24 @@ def _read_seqscope_matrix(matrix_dir: PathLike) -> AnnData:
         raise ValueError(f"Seq-Scope matrix has shape {matrix.shape}; expected {expected} or {expected[::-1]}.")
     adata = AnnData(
         X=matrix,
-        obs=pd.DataFrame(index=pd.Index(barcodes.astype(str), name="barcode")),
+        obs=pd.DataFrame(index=_ids(barcodes, "Seq-Scope matrix barcodes").rename("barcode")),
         var=features.set_index("gene_id"),
     )
-    adata.var_names_make_unique()
+    _ids(adata.var_names, "Seq-Scope gene IDs")
     return adata
 
 
 def _read_seqscope_positions(path: PathLike) -> pd.DataFrame:
     positions = pd.read_csv(
-        Path(path).expanduser().resolve(),
-        sep=r"\s+",
-        header=None,
-        names=["barcode", "lane", "tile", "x", "y"],
-        dtype={"barcode": str, "lane": "uint16", "tile": "uint16", "x": "uint32", "y": "uint32"},
+        Path(path).expanduser().resolve(), sep=r"\s+", header=None, dtype=str, keep_default_na=False
     )
-    if positions["barcode"].duplicated().any():
-        raise ValueError("Seq-Scope position barcodes must be unique.")
-    return positions.set_index("barcode")
+    if positions.shape[1] != 5 or positions.empty:
+        raise ValueError("Seq-Scope positions require five fields: barcode, lane, tile, x, y")
+    positions.columns = ["barcode", "lane", "tile", "x", "y"]
+    positions.index = _ids(positions.pop("barcode"), "Seq-Scope position barcodes")
+    for column in positions:
+        positions[column] = integer_counts(_numeric(positions[column], f"Seq-Scope {column}"), "Seq-Scope positions")
+    return positions
 
 
 def _initialize_seqscope_metadata(adata: AnnData, binsize: Optional[int]) -> None:
@@ -93,11 +98,8 @@ def read_seqscope(
     adata = _read_seqscope_matrix(matrix_dir)
     positions = _read_seqscope_positions(positions_path)
     available = adata.obs_names.isin(positions.index)
-    if not np.any(available):
-        raise ValueError("No matrix barcodes match the Seq-Scope position file.")
     if not np.all(available):
-        lm.main_warning(f"Discarding {int((~available).sum())} barcodes without spatial coordinates.")
-    adata = adata[available].copy()
+        raise ValueError(f"Missing Seq-Scope positions for {int((~available).sum())} matrix barcodes")
     adata.obs = adata.obs.join(positions, how="left")
 
     if binsize is None:

@@ -49,6 +49,7 @@ from anndata import AnnData
 from scipy.sparse import coo_matrix, csr_matrix
 
 from ...configuration import SKM
+from ._matrix import _ids, _numeric, table, table_values
 
 try:
     import tifffile
@@ -442,24 +443,25 @@ def _is_control_gene(name: str) -> bool:
     return token.startswith("blank") or token.startswith("negcontrol") or token.startswith("antisense")
 
 
-def _prepare_cell_by_gene(path: Path, dtype: str = "int32", sparse: bool = True) -> AnnData:
-    df = _read_table_with_auto_sep(path, index_col=0)
-    df = df.loc[:, [str(c).strip() != "" and not str(c).lower().startswith("unnamed") for c in df.columns]]
-    df.index = df.index.astype(str)
-    df.columns = pd.Index([str(c) for c in df.columns], dtype="object")
-
-    arr = df.to_numpy(dtype=np.dtype(dtype), copy=False)
-    X = csr_matrix(arr) if sparse else arr
-    adata = ad.AnnData(X=X)
-    adata.obs_names = pd.Index(df.index.astype(str), dtype="object")
-    adata.var_names = pd.Index(df.columns.astype(str), dtype="object")
-    adata.obs["cell_id"] = adata.obs_names.astype(str)
-    adata.var["gene"] = adata.var_names.astype(str)
+def _prepare_cell_by_gene(path: Path, dtype=None, sparse: bool = True) -> AnnData:
+    df = table(path, full=True, budget=sys.maxsize)
+    ids = _ids(df.iloc[:, 0], "MERFISH expression IDs")
+    genes = _ids(df.columns[1:], "MERFISH genes")
+    arr = table_values(df.iloc[:, 1:], "MERFISH counts", raw=True)
+    if dtype is not None:
+        converted = arr.astype(dtype)
+        if any(int(a) != int(b) for a, b in zip(arr.flat, converted.flat)):
+            raise ValueError("Requested MERFISH dtype would lose count precision")
+        arr = converted
+    adata = ad.AnnData(X=csr_matrix(arr) if sparse else arr)
+    adata.obs_names, adata.var_names = ids, genes
+    adata.obs["cell_id"] = ids
+    adata.var["gene"] = genes
     return adata
 
 
 def _prepare_cell_metadata(path: Path) -> pd.DataFrame:
-    meta = _read_table_with_auto_sep(path)
+    meta = table(path, full=True, budget=sys.maxsize)
     id_col = _guess_cell_id_column(meta)
 
     if id_col is None:
@@ -506,8 +508,8 @@ def _prepare_cell_metadata(path: Path) -> pd.DataFrame:
         )
 
     meta = meta.copy()
-    meta[id_col] = meta[id_col].astype(str)
-    meta = meta.drop_duplicates(subset=[id_col]).set_index(id_col)
+    meta[id_col] = _ids(meta[id_col], "MERFISH metadata IDs")
+    meta = meta.set_index(id_col)
 
     rename_map = {}
     norm_to_col = {_normalize_token(c): c for c in meta.columns}
@@ -536,6 +538,8 @@ def _attach_cell_metadata(adata: AnnData, meta: Optional[pd.DataFrame], sample_k
         adata.obs["sample"] = sample_key
         return
 
+    if not adata.obs_names.isin(meta.index).all():
+        raise ValueError("MERFISH matrix IDs lack matching metadata/coordinates")
     adata.obs = adata.obs.join(meta, how="left")
     adata.obs["sample"] = sample_key
     adata.obs["cell_id"] = adata.obs_names.astype(str)
@@ -543,11 +547,12 @@ def _attach_cell_metadata(adata: AnnData, meta: Optional[pd.DataFrame], sample_k
     if "fov" in adata.obs.columns:
         adata.obs["fov"] = adata.obs["fov"]
 
-    if "center_x" in adata.obs.columns and "center_y" in adata.obs.columns:
-        xy = np.c_[
-            pd.to_numeric(adata.obs["center_x"], errors="coerce"), pd.to_numeric(adata.obs["center_y"], errors="coerce")
-        ]
-        adata.obsm["spatial"] = xy.astype(float, copy=False)
+    axes = ["center_x", "center_y"]
+    if not all(axis in adata.obs for axis in axes):
+        raise ValueError("MERFISH metadata requires center_x and center_y")
+    if "center_z" in adata.obs:
+        axes.append("center_z")
+    adata.obsm["spatial"] = _numeric(adata.obs[axes], "MERFISH spatial coordinates")
 
 
 def _aggregate_transcripts_to_adata(
@@ -1064,7 +1069,7 @@ def read_merfish(
         )
 
     _progress(f"Loading cell-by-gene matrix: {counts_path.name}")
-    adata = _prepare_cell_by_gene(counts_path, dtype="int32", sparse=True)
+    adata = _prepare_cell_by_gene(counts_path, sparse=True)
     aggregation = "cell_table"
 
     _progress(f"Loading cell metadata: {meta_path.name}")

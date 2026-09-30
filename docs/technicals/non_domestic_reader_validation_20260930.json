@@ -1,0 +1,389 @@
+{
+  "date": "2026-09-30",
+  "base_commit": "82002ba0910a0fa29874f1da92e49a76bc9186a7",
+  "scope": "Existing spatial platforms excluding the four newly added domestic readers; existing Stereo-seq included. Seq-Scope direct-only support is explicitly tested, not counted as auto support.",
+  "final_rounds": {
+    "full_io_regression": 1,
+    "real_datasets": 2,
+    "real_routes_per_dataset": 2,
+    "final_real_reads": 4,
+    "final_real_h5ad_roundtrips": 4,
+    "note": "Development iterations and exact-final-source replays are not additional independent datasets."
+  },
+  "full_io_suite": {
+    "tests": 406,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 405,
+    "seconds": 7.46
+  },
+  "new_cases_by_file": {
+    "test_imaging_reader_accuracy": 61,
+    "test_other_reader_accuracy": 34,
+    "test_tenx_reader_accuracy": 73
+  },
+  "new_cases_by_platform": {
+    "visium": 18,
+    "visium_hd_bin": 19,
+    "visium_hd_cellseg": 10,
+    "xenium": 17,
+    "atera": 9,
+    "merfish": 14,
+    "seqfish": 15,
+    "nanostring": 16,
+    "starmap_plus": 16,
+    "slideseq": 15,
+    "stereoseq": 11,
+    "seqscope_direct_only": 8
+  },
+  "test_warnings": {
+    "count": 87,
+    "sources": "Expected duplicate gene-symbol and optional-asset warnings, plus two existing pandas fixture FutureWarnings"
+  },
+  "real_native_audits": {
+    "visium": {
+      "platform": "visium",
+      "scope": "complete native counts and coordinates; no sampling",
+      "source_url": "https://www.10xgenomics.com/datasets/mouse-brain-section-coronal-1-standard-1-1-0",
+      "automatic": {
+        "shape": [
+          2702,
+          32285
+        ],
+        "nnz": 16031101,
+        "dtype": "int64",
+        "total_counts": 85825294,
+        "obs_unique": true,
+        "var_unique": false,
+        "var_columns": [
+          "gene_ids",
+          "feature_types",
+          "genome"
+        ]
+      },
+      "direct": {
+        "shape": [
+          2702,
+          32285
+        ],
+        "nnz": 16031101,
+        "dtype": "int64",
+        "total_counts": 85825294,
+        "obs_unique": true,
+        "var_unique": false,
+        "var_columns": [
+          "gene_ids",
+          "feature_types",
+          "genome"
+        ]
+      },
+      "route_checks": {
+        "all_counts_exact": true,
+        "all_barcodes_exact": true,
+        "all_xy_exact": true,
+        "all_source_feature_ids_and_symbols_exact": true
+      },
+      "source_checks": {
+        "all_counts_exact": true,
+        "all_gene_ids_or_symbols_exact": true,
+        "all_barcode_to_xy_join_exact": true
+      },
+      "source_matrix_records": 16031101,
+      "image_and_scale_checks": {
+        "hires_exact": true,
+        "lowres_exact": true,
+        "scalefactors_exact": true
+      },
+      "semantic_differences": [
+        "Both readers preserve source gene symbols as var_names (including source duplicate symbols); the gene_ids column preserves stable IDs.",
+        "Additional optional QC image keys/provenance metadata differ; hires/lowres pixels and scalefactors compared exactly."
+      ],
+      "passed": true,
+      "automatic_seconds": 1.6688431660295464,
+      "direct_seconds": 1.3122072499827482,
+      "audit_script_sha256": "be6f5d1ef2caa6e3e02181fbadcddb161476b3a0d5bd7b2842475331b1fae58e",
+      "io_source_hashes_match_final_tested_source": true,
+      "input_files": [
+        {
+          "name": "filtered_feature_bc_matrix.h5",
+          "bytes": 21106953,
+          "sha256": "eb78379e02dcf48036abf05b67233e73ecb0d880787feb82f76ff16f6ce01eb3"
+        },
+        {
+          "name": "spatial/aligned_fiducials.jpg",
+          "bytes": 1604013,
+          "sha256": "0a9fd0c6b41c7664f9e5dbfd4d5740d79b3e143964cf9406353c349054ffce6f"
+        },
+        {
+          "name": "spatial/detected_tissue_image.jpg",
+          "bytes": 1822842,
+          "sha256": "8b885f70ab35a93d7a1baba876f3ede7b092ad698b758c486008995063d46de6"
+        },
+        {
+          "name": "spatial/scalefactors_json.json",
+          "bytes": 165,
+          "sha256": "b374a4c1a538d8513b6a22cfee26f25a0f2e6b5c2c2b2288e430dde1a7206703"
+        },
+        {
+          "name": "spatial/tissue_hires_image.png",
+          "bytes": 5162266,
+          "sha256": "b4d2b051cebb075d4dbdfa5983e18caf473f81cb245fa867caff35a3b686e305"
+        },
+        {
+          "name": "spatial/tissue_lowres_image.png",
+          "bytes": 421119,
+          "sha256": "89f02840fb6bd358e0d0560b7795f2fc458636c44aea75d2148f9d5f7f5df748"
+        },
+        {
+          "name": "spatial/tissue_positions_list.csv",
+          "bytes": 185022,
+          "sha256": "19be19741e7a7ec27615ebab4b2629273167b69efb5e4158af0ea92de3ff99ae"
+        }
+      ],
+      "roundtrip": {
+        "automatic": {
+          "filename": "visium_automatic.h5ad",
+          "sha256": "c4f26d0fa7f6ea8406e64d7773b1f753f52da596f8d2e92c61600e31f51bbb04",
+          "counts_ids_xy_obs_var_images_exact": true
+        },
+        "direct": {
+          "filename": "visium_direct.h5ad",
+          "sha256": "abf64bc9f4ecacfddfd3fcaa4686b65eb92704a839f9287402fbaef3d6e60938",
+          "counts_ids_xy_obs_var_images_exact": true
+        }
+      }
+    },
+    "slideseq": {
+      "platform": "slideseq",
+      "scope": "complete native counts and coordinates; no sampling",
+      "source_url": "https://singlecell.broadinstitute.org/single_cell/study/SCP354/slide-seq-study#study-download",
+      "automatic": {
+        "shape": [
+          38666,
+          19869
+        ],
+        "nnz": 4442379,
+        "dtype": "int64",
+        "total_counts": 5152436,
+        "obs_unique": true,
+        "var_unique": true,
+        "var_columns": []
+      },
+      "direct": {
+        "shape": [
+          38666,
+          19869
+        ],
+        "nnz": 4442379,
+        "dtype": "int64",
+        "total_counts": 5152436,
+        "obs_unique": true,
+        "var_unique": true,
+        "var_columns": [
+          "gene_symbol"
+        ]
+      },
+      "route_checks": {
+        "all_counts_exact": true,
+        "all_barcodes_exact": true,
+        "all_xy_exact": true
+      },
+      "source_checks": {
+        "all_counts_exact": true,
+        "all_gene_ids_or_symbols_exact": true,
+        "all_barcode_to_xy_join_exact": true
+      },
+      "source_matrix_cells_including_zeros": 768254754,
+      "source_nonzero_records": 4442379,
+      "image_checks": {
+        "direct_BeadImage_pixels_exact": true,
+        "automatic_status": "deferred_resource",
+        "automatic_original_path_preserved": true,
+        "original_shape": [
+          6030,
+          6030
+        ],
+        "decoded_bytes": 36360900,
+        "automatic_image_budget_bytes": 33554432
+      },
+      "semantic_differences": [
+        "Direct reader loads the original BeadImage pixels; automatic reader retains its original path with deferred_resource because 6030x6030 pixels exceed its fixed 32 MiB optional-image budget.",
+        "Coordinates preserve source units; no micrometer calibration inferred."
+      ],
+      "staging": "Three byte-identical archive members: full native matrix and coordinates plus primary BeadImage.tif; optional channel/worker images not staged.",
+      "passed": true,
+      "automatic_seconds": 46.27432329201838,
+      "direct_seconds": 45.79566225002054,
+      "source_check_seconds": 14.163638416968752,
+      "audit_script_sha256": "be6f5d1ef2caa6e3e02181fbadcddb161476b3a0d5bd7b2842475331b1fae58e",
+      "io_source_hashes_match_final_tested_source": true,
+      "input_files": [
+        {
+          "name": "MappedDGEForR.csv",
+          "bytes": 1537220402,
+          "sha256": "e95b2f54d1f9665b31e2f2ce045b27c71d033f495d7e3cf53ce8a3639a3b3f25"
+        },
+        {
+          "name": "BeadLocationsForR.csv",
+          "bytes": 1838247,
+          "sha256": "0d9c4b9bb78fd927f0f8bc77dc567ebeafbbc977870590f541d2866cd7e18310"
+        },
+        {
+          "name": "BeadImage.tif",
+          "bytes": 3702490,
+          "sha256": "43829dcbbb44a8eee2b4a377532b7f33c50afeda40f33f707b39644c7ebbe3f0"
+        }
+      ],
+      "roundtrip": {
+        "automatic": {
+          "filename": "slideseq_automatic.h5ad",
+          "sha256": "5dd2c75aaa2d5d524e25b2aa50741aa3e1954705cf3df923d0371e5e87d94828",
+          "counts_ids_xy_obs_var_images_exact": true
+        },
+        "direct": {
+          "filename": "slideseq_direct.h5ad",
+          "sha256": "d9fd42ad88f712e8e100467a25e420cbedcf729b369d227718539f6c98861a25",
+          "counts_ids_xy_obs_var_images_exact": true
+        }
+      },
+      "archive": {
+        "path": "Puck_180413_7.tar",
+        "bytes": 325371115,
+        "sha256": "39c005b56a69e3a7476db8a05400e412149c3929b2443944db83c248cc2cdd4f"
+      }
+    }
+  },
+  "code_quality": {
+    "files": [
+      "spateo/io/single/_formats.py",
+      "spateo/io/spatial/_assets.py",
+      "spateo/io/spatial/_atera.py",
+      "spateo/io/spatial/_matrix.py",
+      "spateo/io/spatial/_merfish.py",
+      "spateo/io/spatial/_nanostring.py",
+      "spateo/io/spatial/_seqfish.py",
+      "spateo/io/spatial/_seqscope.py",
+      "spateo/io/spatial/_slideseq.py",
+      "spateo/io/spatial/_slideseq_matrix.py",
+      "spateo/io/spatial/_starmap_plus.py",
+      "spateo/io/spatial/_visium.py",
+      "spateo/io/spatial/_visium_hd.py",
+      "spateo/io/spatial/_xenium.py",
+      "spateo/io/spatial/auto/_contracts.py",
+      "tests/io/test_imaging_reader_accuracy.py",
+      "tests/io/test_other_reader_accuracy.py",
+      "tests/io/test_tenx_reader_accuracy.py"
+    ],
+    "checks": {
+      "compile": {
+        "exit_code": 0,
+        "output": ""
+      },
+      "isort": {
+        "exit_code": 0,
+        "output": ""
+      },
+      "black": {
+        "exit_code": 0,
+        "output": "All done! ✨ 🍰 ✨\n18 files would be left unchanged.\n"
+      },
+      "diff": {
+        "exit_code": 0,
+        "output": ""
+      }
+    },
+    "make_check": {
+      "exit_code": 2,
+      "output": "python -m compileall -q spateo\nisort --profile black --check spateo/_native spateo/io spateo/preprocessing spateo/alignment/utils.py spateo/plotting/static/position.py spateo/svg/get_svg.py spateo/svg/get_svg_between_slice.py spateo/svg/utils.py spateo/tdr/interpolations/interpolation_sparseVFC.py spateo/tdr/models/models_backbone/backbone.py spateo/tdr/models/models_backbone/backbone_methods.py spateo/tdr/models/models_migration/arrow_model.py spateo/tdr/models/models_migration/morphofield_model.py spateo/tdr/models/models_migration/morphopath_model.py spateo/tdr/morphometrics/morphofield/sparsevfc.py spateo/tdr/morphometrics/morphofield/trajectory.py spateo/tdr/morphometrics/morphofield_dg/differential_geometry.py spateo/tools/cluster/cluster_spagcn.py spateo/tools/cluster/spagcn_utils.py spateo/tools/cluster/utils.py spateo/tools/glm.py spateo/tools/spatially_variable_gene_ot.py tests/io tests/preprocessing tests/test_native_runtime.py skills/setup-spateo-environment/scripts/verify_environment.py spateo/get_version.py\nERROR: /Users/gaomohan/Documents/New project/spateo-other-readers-20260930/source/tests/io/test_slideseq_stream.py Imports are incorrectly sorted and/or formatted.\nERROR: /Users/gaomohan/Documents/New project/spateo-other-readers-20260930/source/tests/io/test_spatial_auto.py Imports are incorrectly sorted and/or formatted.\nERROR: /Users/gaomohan/Documents/New project/spateo-other-readers-20260930/source/tests/preprocessing/test_tissue_loss_v3.py Imports are incorrectly sorted and/or formatted.\nmake: *** [check] Error 1\n"
+    }
+  },
+  "tested_io_sha256": {
+    "spateo/io/__init__.py": "23ae81bda56164d508d00cdae08074b07952de48c95814ae5ca7eca08ee4f926",
+    "spateo/io/general/__init__.py": "12298e5edd2e8189475efb52ca4650ba1d14435b8255ff7bfe00ee2593378b0e",
+    "spateo/io/general/_serialization.py": "1cbe82e0a0e9d77fb8d9e6430563edcab64cdab2aee71a62afcddbbd0c44f01c",
+    "spateo/io/general/_tabular.py": "2d4f22b1f92efcd76713ac9e23ee324a7c2afd67ba5b63f28fd0c0f22be9da82",
+    "spateo/io/single/__init__.py": "2f100307e27a01e03c4883cb82caac0e4f5f76d697d01dcc14851163cf998e4f",
+    "spateo/io/single/_formats.py": "be69d0340f5cd495eb2ef76ada55aad5ca2ef0534a654264564d296556c366c0",
+    "spateo/io/single/_read.py": "717d0f779af6e14ca69c29e27eb95b395b1295b352524ed153f6583c42efc0ee",
+    "spateo/io/spatial/__init__.py": "c9d4252f31f85903a8139c7abb3871aa6c72943b0ad7e679fde94531196b8871",
+    "spateo/io/spatial/_assets.py": "32eb44bc49a9b8f16998f55c209cdf4d3c735847fa00cab1581289c98ca2de54",
+    "spateo/io/spatial/_atera.py": "520d345d7a21e369b2c07d5db53fb91638f36904478d768b812a570683b87544",
+    "spateo/io/spatial/_bmkmanu.py": "a835caf663d520d68dc25794b1a76a7a9fa7710d79aec8cbfa68f4722c3d0d47",
+    "spateo/io/spatial/_domestic.py": "8e29d04b3a2b3d8f5ad479c1acb7a43a6cf411cb46b25e3c30e0198944f2700c",
+    "spateo/io/spatial/_errors.py": "032dc1263a778eaa283987ccb4ba87e23ee93c5660f14ed239ca92d0d5631df4",
+    "spateo/io/spatial/_geometry.py": "0e08302dcc6b0eeee1d5b9878ac9f965df3f14307dc661980a884412cccebc2e",
+    "spateo/io/spatial/_image.py": "63e10b90581e8913bb9641bf33779bb66f8e320839221c3bd78143e26112b07f",
+    "spateo/io/spatial/_layout.py": "b2969bea8a45341b763a9f38e914ef1e4cebb9ce49968bf05c6a3695becc70c7",
+    "spateo/io/spatial/_matrix.py": "40b3f8bc8be541ba832dbae31c5d554e6a04a873741ba30d71b7b5f191de6b82",
+    "spateo/io/spatial/_merfish.py": "22a8c0d1c6b11ab003441ca766b14e7fb4aa0b08cc920bf33073a7d48dc64885",
+    "spateo/io/spatial/_nanostring.py": "a55e71ef16318d8be33ddf9d94a4180c7f723012c662488803322c2faf48c33d",
+    "spateo/io/spatial/_native_common.py": "6f986f48a359f8be7960ff933253778bfe4668834e6f2065091f191f71399c68",
+    "spateo/io/spatial/_native_readers.py": "6a0966444250aa44cd583ccff5888f6a0d249e0202bf53b4bddd0b48d1a324c2",
+    "spateo/io/spatial/_provenance.py": "5f57b1f4796a803e05f5a11b89831aab6afa62257b801e5de52ceb28f14110fd",
+    "spateo/io/spatial/_read_engine.py": "373a24700c27f9bdbf3343ade4247610bcc45c91c37fad849c54d2124a3aba00",
+    "spateo/io/spatial/_read_result.py": "d0d5b203e23f68f4f6cac03b5c28ae616306b3319cc048bb33b08daa91a72976",
+    "spateo/io/spatial/_recovery.py": "5e145e1c6799afe9afd3ad14d3ee9eecc4c2f93c1ae2e046868678f0d2163c6d",
+    "spateo/io/spatial/_salus.py": "891945f6e1e3185d2a126b724d48dbbc6b7c09e108f30c0eef3daa5d5375ea74",
+    "spateo/io/spatial/_seekspace.py": "e7bba83d5d3bbd4b09af887f3a99814ae6947b150d4148bd9fdba9dd1b355a44",
+    "spateo/io/spatial/_seqfish.py": "d84715917ff2b77965aa210c0f31fcebcdcc55e3aa9d6fcdb0a9e44138d5451c",
+    "spateo/io/spatial/_seqscope.py": "28fe07133452ae47e5b5056257e197c7894f8e27429cdd074834be22a09a1a58",
+    "spateo/io/spatial/_singleron.py": "f324928fd768b090683f6fddfadc32e053b6459faea2c21f1f9609dbd5aae99d",
+    "spateo/io/spatial/_slideseq.py": "d70ccd59eb2dc7f3e3a51b226526da2efc08ff703c56653396a3961372491e5f",
+    "spateo/io/spatial/_slideseq_matrix.py": "4b74a9251219610f6ade4294a6a60e1d459d1b50580bb8a2527d1cb9f4fbcb05",
+    "spateo/io/spatial/_starmap_plus.py": "0be0c1ae671964692ad413869217d1ac5a8e062bad0a253fd77abcdb101a3942",
+    "spateo/io/spatial/_stereoseq.py": "5df508b8b66d144ced80f614a93b02862daad5b761408bcad9c23662d351cdbd",
+    "spateo/io/spatial/_utils.py": "3f8b5e2fc84b97379d6006f5ef45b885a1d54c2886260910c6b62d41d47f1857",
+    "spateo/io/spatial/_visium.py": "295a7059df39b648b880ddf2935580237f14bcd58582d66c83983599d19aadc8",
+    "spateo/io/spatial/_visium_hd.py": "6b77f47eb068876d9a6d8ee12fb8ecbf51b4d14fd276facb73eac56eb41624bd",
+    "spateo/io/spatial/_xenium.py": "2212ddc77c0323593304aed33338dc3904e3a4dc7a911568077295818944e84a",
+    "spateo/io/spatial/auto/__init__.py": "8a219c9a06d7df1859e734e783e0a817549a7637df6ceafab84c7acf0ae7911e",
+    "spateo/io/spatial/auto/_automatic.py": "c4c241d6a771053c60757cd793de971b6e6c983379d88190f2d42e08f320ac41",
+    "spateo/io/spatial/auto/_contracts.py": "d403dd541c7f6225052b69daa6942855f94cd35646ac2ad10741b9a0abc0e78a",
+    "spateo/io/spatial/auto/_discovery.py": "fc106b47e4871d2802bd950d7b7149aa41f20a9c4155c89feadb4f1a06042932",
+    "spateo/io/spatial/auto/_domestic.py": "853699bacf363d22e24d0436694b17bfa55dfc07bd730b280be6e85805a4ae51",
+    "spateo/io/spatial/auto/_errors.py": "6df3b47520ee39fe97369e847686bb2ee0f99e504cd340b6f3f453dd9292f133",
+    "spateo/io/spatial/auto/_formats.py": "3ee5f45f43d4deed3fb736f0fc2c8cecfa9faba38b1df66e0914efb26c641f50",
+    "spateo/io/spatial/auto/_recovery.py": "0aa4ead90edee086ea4ba77378a1b8ab890f71b94d0cf5905b0b76363c18beba",
+    "spateo/io/spatial/auto/_result.py": "dbe0c2bf2d69c906c2d4af1fa593493019ccf1c0616cc5989e093bf8d4ba4d4c",
+    "spateo/io/spatial/auto/_stereo.py": "53f03608a8317d19fd6674301f04c81eb13aa639f6feca4788cdf00fd23ffb23"
+  },
+  "tested_new_test_sha256": {
+    "tests/io/test_imaging_reader_accuracy.py": "0e8eb4e98affe9d2b71920a8056dea2f31373dba3e01940fe179fbac71d7c0c0",
+    "tests/io/test_other_reader_accuracy.py": "5e57684f0693c2d8ed198df2be8d965123367eeea4be8868634312f0ca5e37c5",
+    "tests/io/test_tenx_reader_accuracy.py": "b8018cdc7d01837910969d90519e1af8a7d10b82b6bd22c3e9a606b268941f42"
+  },
+  "quality_baseline": [
+    {
+      "path": "tests/io/test_slideseq_stream.py",
+      "unchanged_from_base": true,
+      "sha256": "aa61044bdc6c47963e6ccb3d14dcc08e57aa92bce2735533547618a3bbe067ef"
+    },
+    {
+      "path": "tests/io/test_spatial_auto.py",
+      "unchanged_from_base": true,
+      "sha256": "70385e7b86fbdd85ff7a2d8d5bceb5c14e1fb8e575a17969c0651c2fedb4917f"
+    },
+    {
+      "path": "tests/preprocessing/test_tissue_loss_v3.py",
+      "unchanged_from_base": true,
+      "sha256": "ccbe534618d66263bd0a40209a2fc120f60670e5775254d89b8422c47e77bf57"
+    }
+  ],
+  "limits": [
+    "Native-schema fixtures are not a vendor-version distribution benchmark; no universal platform classification accuracy is claimed.",
+    "Only Visium and Slide-seq have fresh full real-native audits in this round; earlier BMK/MOSTA results are not reclassified as new samples.",
+    "Seq-Scope is direct-only; Open-ST has no dedicated native automatic reader in this revision.",
+    "read_stereoseq remains a known-platform automatic wrapper, so its route equality alone does not establish implementation independence; legacy read_bgi is tested separately.",
+    "Direct legacy defaults can select Gene Expression features or use bin centroids; comparisons respect these explicitly tested semantics.",
+    "Optional asset paths/keys and budget policies differ; complete equality of arbitrary uns metadata is not claimed.",
+    "Complex multi-frame rasters, all optional boundary/transcript/segmentation fields and biological correctness are not exhaustively tested."
+  ],
+  "iteration_notes": [
+    "First 10x focused run rejected malformed polygons with a low-level exception; wrapped with file context. Negative/fractional HD tests then exposed misleading fallback; fixed.",
+    "An initial legacy Stereo bin-center fixture used 24.5; the documented geometric bin interval gives 25 at bin_size 50. The source reader was correct and the oracle was corrected.",
+    "Two alternative Slide-seq count encodings are returned as two named automatic datasets, not silently selected; the collection test expectation was corrected to require both and reject unique .adata access.",
+    "Early real-audit assumptions about stable IDs as var_names and always-loaded image sets were corrected against actual schema and resource policy; the complete audits were replayed.",
+    "The final real-data replay occurred after IO source freeze; all 48 IO source hashes match this final validation record."
+  ]
+}

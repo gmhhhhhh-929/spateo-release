@@ -23,6 +23,7 @@ from ..._registry import register_function
 # spateo key
 from ...configuration import SKM
 from ..single import read_10x_h5, read_10x_mtx
+from ._matrix import _ids, _numeric
 
 try:
     from ..._settings import Colors
@@ -76,22 +77,22 @@ def _read_spatial_images(
     hires_image_path: str,
     lowres_image_path: str,
 ):
-    try:
-        with Image.open(root / hires_image_path) as hires_img:
-            hires = np.asarray(hires_img)
-        with Image.open(root / lowres_image_path) as lowres_img:
-            lowres = np.asarray(lowres_img)
-        return hires, lowres
-    except FileNotFoundError as exc:
-        warnings.warn(f"Could not load tissue images: {exc}")
-        return None, None
+    images = []
+    for relative in (hires_image_path, lowres_image_path):
+        try:
+            with Image.open(root / relative) as image:
+                images.append(np.asarray(image).copy())
+        except (OSError, ValueError) as exc:
+            warnings.warn(f"Could not load tissue image {relative}: {exc}")
+            images.append(None)
+    return tuple(images)
 
 
 def _read_scalefactors(root: Path, scalefactors_path: str) -> dict:
     try:
         with open(root / scalefactors_path, "r", encoding="utf-8") as file:
             return json.load(file)
-    except FileNotFoundError as exc:
+    except (OSError, ValueError) as exc:
         warnings.warn(f"Could not load scalefactors: {exc}")
         return {}
 
@@ -134,11 +135,10 @@ def _init_spatial_slot(
 ) -> None:
     adata.uns.setdefault("spatial", {})
     adata.uns["spatial"][sample] = {}
-    if hires_img is not None and lowres_img is not None:
-        adata.uns["spatial"][sample]["images"] = {
-            "hires": hires_img,
-            "lowres": lowres_img,
-        }
+    adata.uns["spatial"][sample]["images"] = {}
+    for name, image in (("hires", hires_img), ("lowres", lowres_img)):
+        if image is not None:
+            adata.uns["spatial"][sample]["images"][name] = image
     adata.uns["spatial"][sample]["scalefactors"] = scalefactors
 
 
@@ -254,16 +254,11 @@ def read_visium_hd_bin(
     mtx_path = root / count_mtx_dir
     _progress(f"Loading count matrix (h5='{count_h5_path}', mtx='{count_mtx_dir}')")
     if h5_path.exists():
-        try:
-            adata = read_10x_h5(h5_path)
-        except Exception as exc:
-            warnings.warn(f"Failed to read H5 matrix ({h5_path}): {exc}. Falling back to MTX directory.")
-            _progress("H5 read failed, falling back to MTX directory", level="warn")
-            if not mtx_path.exists():
-                raise FileNotFoundError(f"Neither count_h5_path nor count_mtx_dir exists under {root}")
-            adata = read_10x_mtx(mtx_path)
+        # A present but invalid H5 is a core input error. MEX is a fallback only
+        # when H5 is absent; silently replacing corrupt counts can change data.
+        adata = read_10x_h5(h5_path)
     elif mtx_path.exists():
-        adata = read_10x_mtx(mtx_path)
+        adata = read_10x_mtx(mtx_path, make_unique=False)
     else:
         raise FileNotFoundError(f"Neither {h5_path} nor {mtx_path} found")
 
@@ -291,7 +286,11 @@ def read_visium_hd_bin(
     elif tissue_df.index.name != "barcode" and len(tissue_df.columns) > 0:
         tissue_df = tissue_df.set_index(tissue_df.columns[0])
 
-    adata.obs = pd.merge(adata.obs, tissue_df, left_index=True, right_index=True, how="left")
+    tissue_df.index = _ids(tissue_df.index, "Visium HD tissue positions")
+    missing = adata.obs_names[~adata.obs_names.isin(tissue_df.index)]
+    if len(missing):
+        raise ValueError(f"{len(missing)} matrix barcodes lack Visium HD positions: {list(missing[:5])}")
+    adata.obs = adata.obs.join(tissue_df, how="left")
 
     coord_cols = None
     for col_pair in (
@@ -309,7 +308,7 @@ def read_visium_hd_bin(
             "Expected one of: ['pxl_col_in_fullres', 'pxl_row_in_fullres'], "
             "['pxl_col', 'pxl_row'], ['x', 'y'], or ['array_col', 'array_row']"
         )
-    adata.obsm["spatial"] = adata.obs[coord_cols].values
+    adata.obsm["spatial"] = _numeric(adata.obs[coord_cols], "Visium HD spatial coordinates")
 
     _progress("Loading images and scale factors")
     hires_img, lowres_img = _read_spatial_images(root, hires_image_path, lowres_image_path)
@@ -405,7 +404,12 @@ def read_visium_hd_seg(
         seg_path = fallback
 
     _progress(f"Loading segmentation geometry: {seg_path}")
-    gdf_seg = gpd.read_file(seg_path)
+    from shapely.errors import GEOSException
+
+    try:
+        gdf_seg = gpd.read_file(seg_path)
+    except (OSError, ValueError, GEOSException) as exc:
+        raise ValueError(f"Invalid Visium HD segmentation file {seg_path}: {exc}") from exc
     df = pd.DataFrame(gdf_seg)
     if "cell_id" in df.columns:
         df["cellid"] = df["cell_id"].apply(lambda x: f"cellid_{str(x).zfill(9)}-1")
@@ -418,20 +422,26 @@ def read_visium_hd_seg(
     _progress(f"Loading count matrix: {matrix_path}")
     adata = read_10x_h5(matrix_path)
 
-    adata = adata[adata.obs_names.isin(df["cellid"]), :]
-    if adata.n_obs == 0:
+    df["cellid"] = _ids(df["cellid"], "Visium HD cell segmentations")
+    missing = adata.obs_names[~adata.obs_names.isin(df["cellid"])]
+    if len(missing):
         raise ValueError(
-            "No overlapping cell IDs between matrix and segmentation file. "
-            "Please confirm `cellid` naming and matrix source."
+            f"{len(missing)} matrix cell IDs lack segmentation geometry; "
+            "provide matching matrix and segmentation files."
         )
     df = df.set_index("cellid").loc[adata.obs_names]
 
     if isinstance(df["geometry"].iloc[0], str):
         df["geometry"] = df["geometry"].apply(wkt.loads)
 
+    if any(
+        poly is None or poly.geom_type not in ("Polygon", "MultiPolygon") or poly.is_empty or not poly.is_valid
+        for poly in df["geometry"]
+    ):
+        raise ValueError("Visium HD segmentation contains empty or invalid cell polygons.")
     df["x"] = df["geometry"].apply(lambda poly: poly.centroid.x)
     df["y"] = df["geometry"].apply(lambda poly: poly.centroid.y)
-    adata.obsm["spatial"] = np.array(df[["x", "y"]])
+    adata.obsm["spatial"] = _numeric(df[["x", "y"]], "Visium HD segmentation centroids")
 
     _progress("Loading images and scale factors")
     hires_img, lowres_img = _read_spatial_images(root, hires_image_path, lowres_image_path)

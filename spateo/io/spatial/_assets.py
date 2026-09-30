@@ -30,7 +30,10 @@ def load_assets(adata, candidate, enabled, budget, diagnostics, *, image_budget=
             diagnostics.append(_diagnostic("optional_scale_error", exc, "warning", path=str(scales)))
     files = []
     # Bounded optional inventory; a directory is never recursively expanded here.
-    for folder in (root, root / "spatial", root / "images", root / "morphology_focus"):
+    folders = [root, root / "spatial", root / "images", root / "morphology_focus"]
+    if candidate.technology == "nanostring":
+        folders.extend([root / "CellComposite", root / "CellLabels"])
+    for folder in folders:
         if not folder.is_dir() or folder.is_symlink():
             continue
         try:
